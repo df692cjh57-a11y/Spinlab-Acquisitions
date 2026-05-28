@@ -1,4 +1,2 @@
-- [Underwriting calculations](underwriting-calcs.md) — financialCalculations.ts is the single source of all deal math; never duplicate formulas in components.
-- [Schema field mapping](schema-field-mapping.md) — `netIncome` = seller claimed net, `adjustedNetIncome` = manual SDE override; new fields added in deals.ts May 2026.
-- [Boolean query param fix](bool-query.md) — Reminders route reads req.query.completed directly, NOT via Zod coerce (zod coerce.boolean("false") → true bug).
-- [Notes API shape](notes-api.md) — createNote data must include `linkedType`, `linkedId`, `noteType`, `content` (not `noteText`); cast as `any` to satisfy strict types.
+- [Financial calculations architecture](fin-calc-arch.md) — `calculateFullUnderwriting` is the main export; `calculateDealFinancials` is a backward-compat alias only.
+- [Deal detail import pattern](deal-detail-imports.md) — three call sites use `calculateFullUnderwriting`; DealDetail component at line ~1136, UnderwritingTab at line ~113, FinancialsForm at line ~473.

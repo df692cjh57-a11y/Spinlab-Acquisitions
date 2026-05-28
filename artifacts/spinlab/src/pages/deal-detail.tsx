@@ -10,7 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCurrency, formatDateShort, isOverdue } from "@/lib/format";
-import { calculateDealFinancials } from "@/lib/financialCalculations";
+import { calculateFullUnderwriting } from "@/lib/financialCalculations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,14 +107,14 @@ function PriorityBadge({ priority }: { priority: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function UnderwritingTab({ deal }: { deal: any }) {
-  const fin = calculateDealFinancials({
+  const fin = calculateFullUnderwriting({
     ...deal,
-    dealScore: deal.dealScore,
     redFlagScore: deal.redFlagScore,
   });
 
-  const offerColor = fin.offerRecommendation.startsWith("Price may")
-    ? "text-emerald-600" : fin.offerRecommendation.startsWith("Negotiate")
+  const offerColor = fin.offerRecommendation.startsWith("Price is at")
+    ? "text-emerald-600"
+    : fin.offerRecommendation.startsWith("Small gap") || fin.offerRecommendation.startsWith("Moderate gap")
     ? "text-amber-600" : "text-red-600";
 
   return (
@@ -169,9 +169,47 @@ function UnderwritingTab({ deal }: { deal: any }) {
       <SectionCard title="Revenue">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Metric label="Gross Revenue" value={formatCurrency(fin.grossRevenue)} />
-          <Metric label="Revenue Breakdown Total" value={fin.revenueBreakdownTotal ? formatCurrency(fin.revenueBreakdownTotal) : "—"} />
+          <Metric label="Revenue Breakdown Total" value={fin.revenueBreakdownTotal ? formatCurrency(fin.revenueBreakdownTotal) : "—"} sub={fin.revenueBreakdownTotal ? "from entered line items" : "no breakdown entered"} />
+          <Metric label="Unallocated Revenue" value={fin.revenueBreakdownDiff ? formatCurrency(fin.revenueBreakdownDiff) : "—"} sub={fin.revenueBreakdownDiffPct ? fmtPct(fin.revenueBreakdownDiffPct) + " unallocated" : undefined} />
           <Metric label="Net Margin" value={fmtPct(fin.netMargin)} accent={fin.netMargin ? fin.netMargin >= 0.3 ? "green" : fin.netMargin < 0.15 ? "red" : undefined : undefined} />
           <Metric label="Revenue Multiple" value={fmtX(fin.revenueMultiple)} />
+          {fin.washFoldRevPct !== null && <Metric label="W&F % of Gross" value={fmtPct(fin.washFoldRevPct)} />}
+          {fin.pickupDeliveryRevPct !== null && <Metric label="PD % of Gross" value={fmtPct(fin.pickupDeliveryRevPct)} />}
+          {fin.commercialRevPct !== null && <Metric label="Commercial % of Gross" value={fmtPct(fin.commercialRevPct)} />}
+        </div>
+      </SectionCard>
+
+      {/* Adjusted SDE Reconciliation */}
+      <SectionCard title="Adjusted SDE Reconciliation">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric
+            label="Seller Claimed Income"
+            value={formatCurrency(fin.sellerClaimedNetIncome)}
+            sub="from seller P&L"
+          />
+          <Metric
+            label="Seller SDE (w/ add-backs)"
+            value={formatCurrency(fin.sellerSDE)}
+            sub={fin.sellerClaimedAddBacks ? `+${formatCurrency(fin.sellerClaimedAddBacks)} add-backs` : "no add-backs entered"}
+          />
+          <Metric
+            label="Buyer-Calculated SDE"
+            value={formatCurrency(fin.calculatedAdjustedSDE)}
+            sub="from expense line items"
+            accent={
+              fin.calculatedAdjustedSDE !== null && fin.sellerSDE !== null
+                ? fin.calculatedAdjustedSDE < fin.sellerSDE * 0.85 ? "red"
+                : fin.calculatedAdjustedSDE > fin.sellerSDE * 1.15 ? "amber"
+                : "green"
+                : undefined
+            }
+          />
+          <Metric
+            label="Adjusted SDE Used"
+            value={formatCurrency(fin.adjustedSDE)}
+            sub={fin.sdeSource === "manual" ? "manual override" : fin.sdeSource === "calculated_buyer" ? "buyer expenses" : fin.sdeSource === "calculated_total" ? "seller expenses" : "insufficient data"}
+            accent="blue"
+          />
         </div>
       </SectionCard>
 
@@ -179,13 +217,56 @@ function UnderwritingTab({ deal }: { deal: any }) {
       <SectionCard title="Expenses">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Metric label="Total Op. Expenses" value={formatCurrency(fin.totalOperatingExpenses)} />
-          <Metric label="Adj. Op. Expenses" value={formatCurrency(fin.adjustedOperatingExpenses)} />
+          <Metric label="Adj. Op. Expenses" value={formatCurrency(fin.adjustedOperatingExpenses)} sub="buyer-adjusted" />
           <Metric label="Expense Ratio" value={fmtPct(fin.expenseRatio)} accent={fin.expenseRatio ? fin.expenseRatio > 0.7 ? "red" : undefined : undefined} />
           <Metric label="Annual Rent" value={formatCurrency(fin.annualRent)} />
           <Metric label="Total Utilities" value={formatCurrency(fin.totalUtilities)} />
           <Metric label="Utility % of Gross" value={fmtPct(fin.utilityPctGross)} />
           <Metric label="Payroll % of Gross" value={fmtPct(fin.payrollPctGross)} />
           <Metric label="Rent / Sq Ft" value={fin.rentPerSqFt ? `$${fin.rentPerSqFt.toFixed(2)}/sqft` : "—"} />
+        </div>
+      </SectionCard>
+
+      {/* Rent & Lease Risk */}
+      <SectionCard title="Rent & Lease Risk">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric
+            label="Rent % of Gross"
+            value={fmtPct(fin.rentPctGross)}
+            sub="target: ≤ 20%"
+            accent={fin.rentPctGross !== null ? fin.rentPctGross > 0.25 ? "red" : fin.rentPctGross > 0.20 ? "amber" : "green" : undefined}
+          />
+          <Metric
+            label="Annual Rent"
+            value={formatCurrency(fin.annualRent)}
+          />
+          <Metric
+            label="Rent / Sq Ft / Yr"
+            value={fin.rentPerSqFt ? `$${fin.rentPerSqFt.toFixed(2)}/sqft` : "—"}
+          />
+          <Metric
+            label="Rent / Machine / Yr"
+            value={fin.rentPerMachine ? formatCurrency(fin.rentPerMachine) : "—"}
+            sub={fin.numMachines > 0 ? `${fin.numMachines} total machines` : undefined}
+          />
+          <Metric
+            label="Rev / Machine / Yr"
+            value={fin.revPerMachine ? formatCurrency(fin.revPerMachine) : "—"}
+          />
+          <Metric
+            label="Rev / Sq Ft / Yr"
+            value={fin.revPerSqFt ? `$${fin.revPerSqFt.toFixed(2)}/sqft` : "—"}
+          />
+          <Metric
+            label="SDE / Sq Ft / Yr"
+            value={fin.sdePerSqFt ? `$${fin.sdePerSqFt.toFixed(2)}/sqft` : "—"}
+          />
+          <Metric
+            label="Debt Service % Gross"
+            value={fmtPct(fin.debtServicePctGross)}
+            sub="debt burden on revenue"
+            accent={fin.debtServicePctGross !== null ? fin.debtServicePctGross > 0.25 ? "red" : undefined : undefined}
+          />
         </div>
       </SectionCard>
 
@@ -233,7 +314,7 @@ function UnderwritingTab({ deal }: { deal: any }) {
           <Metric
             label="DSCR"
             value={fin.dscr !== null ? fin.dscr.toFixed(2) + "x" : "—"}
-            sub="≥ 1.25 preferred"
+            sub="≥ 1.25x preferred"
             accent={fin.dscr !== null ? fin.dscr >= 1.5 ? "green" : fin.dscr < 1.25 ? "red" : "amber" : undefined}
           />
           <Metric
@@ -242,8 +323,25 @@ function UnderwritingTab({ deal }: { deal: any }) {
             sub="≥ 15% target"
             accent={fin.cashOnCashReturn !== null ? fin.cashOnCashReturn >= 0.15 ? "green" : fin.cashOnCashReturn < 0.10 ? "red" : "amber" : undefined}
           />
-          <Metric label="Break-Even Revenue" value={formatCurrency(fin.breakEvenRevenue)} />
-          <Metric label="Break-Even Rev %" value={fmtPct(fin.breakEvenRevenuePct)} />
+          <Metric label="Break-Even Revenue" value={formatCurrency(fin.breakEvenRevenue)} sub={fin.breakEvenRevenuePct ? fmtPct(fin.breakEvenRevenuePct) + " of gross" : undefined} />
+          <Metric
+            label="Debt Yield"
+            value={fin.debtYield !== null ? fmtPct(fin.debtYield) : "—"}
+            sub="SDE / loan amount"
+            accent={fin.debtYield !== null ? fin.debtYield >= 0.10 ? "green" : fin.debtYield < 0.07 ? "red" : "amber" : undefined}
+          />
+          <Metric
+            label="LTV"
+            value={fin.ltv !== null ? fmtPct(fin.ltv) : "—"}
+            sub="loan / asking price"
+            accent={fin.ltv !== null ? fin.ltv > 0.80 ? "red" : fin.ltv < 0.70 ? "green" : undefined : undefined}
+          />
+          <Metric
+            label="Debt Service % Gross"
+            value={fmtPct(fin.debtServicePctGross)}
+            sub="annual debt / gross revenue"
+            accent={fin.debtServicePctGross !== null ? fin.debtServicePctGross > 0.30 ? "red" : undefined : undefined}
+          />
         </div>
       </SectionCard>
 
@@ -467,7 +565,7 @@ function FinancialsForm({ deal }: { deal: any }) {
   const handleEdit = () => { setFd(BLANK_FIN(deal)); setIsEditing(true); };
 
   if (!isEditing) {
-    const f = calculateDealFinancials({ ...deal });
+    const f = calculateFullUnderwriting({ ...deal });
     return (
       <div className="space-y-4">
         <div className="flex justify-end">
@@ -1032,7 +1130,7 @@ export default function DealDetail() {
     );
   }
 
-  const fin = calculateDealFinancials({ ...deal });
+  const fin = calculateFullUnderwriting({ ...deal });
   const warningCount = fin.warnings.filter((w) => w.level !== "info").length;
 
   return (

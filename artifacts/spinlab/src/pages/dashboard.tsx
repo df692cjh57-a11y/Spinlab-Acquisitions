@@ -1,6 +1,7 @@
-import { useGetDashboardSummary } from "@workspace/api-client-react";
+import { useGetDashboardSummary, useListDeals } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { formatCurrency, formatMultiple } from "@/lib/format";
+import { calculateFullUnderwriting } from "@/lib/financialCalculations";
 import { ArrowRight, AlertCircle, TrendingUp, Briefcase, Ban, Activity, DollarSign, FileText, Users } from "lucide-react";
 
 function MetricCard({
@@ -74,13 +75,35 @@ function PriorityBadge({ priority }: { priority: string }) {
 
 export default function Dashboard() {
   const { data: summary, isLoading } = useGetDashboardSummary();
+  const { data: allDeals } = useListDeals({});
+
+  const financialMetrics = (() => {
+    if (!allDeals || allDeals.length === 0) return null;
+    const fins = (allDeals as any[]).map((d) => calculateFullUnderwriting(d));
+    const withDscr = fins.filter((f) => f.dscr !== null);
+    const withCoc  = fins.filter((f) => f.cashOnCashReturn !== null);
+    const avgDscr  = withDscr.length > 0
+      ? withDscr.reduce((s, f) => s + f.dscr!, 0) / withDscr.length
+      : null;
+    const avgCoc   = withCoc.length > 0
+      ? withCoc.reduce((s, f) => s + f.cashOnCashReturn!, 0) / withCoc.length
+      : null;
+    return {
+      avgDscr,
+      avgCoc,
+      dscrBelow125: withDscr.filter((f) => f.dscr! < 1.25).length,
+      rentAbove20:  fins.filter((f) => f.rentPctGross !== null && f.rentPctGross > 0.20).length,
+      multipleAbove5: fins.filter((f) => f.askingMultiple !== null && f.askingMultiple > 5).length,
+      totalWithDscr: withDscr.length,
+    };
+  })();
 
   if (isLoading) {
     return (
       <div className="p-8 max-w-[1400px] mx-auto space-y-6">
         <div className="h-8 w-48 bg-muted animate-pulse rounded" />
         <div className="grid grid-cols-4 gap-3">
-          {[...Array(8)].map((_, i) => (
+          {[...Array(12)].map((_, i) => (
             <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
@@ -149,6 +172,38 @@ export default function Dashboard() {
           value={summary.loisSent}
           sub="awaiting response"
           accent={summary.loisSent > 0 ? "blue" : undefined}
+        />
+        <MetricCard
+          label="Avg. DSCR"
+          value={financialMetrics?.avgDscr != null ? financialMetrics.avgDscr.toFixed(2) + "x" : "—"}
+          sub={financialMetrics ? `${financialMetrics.totalWithDscr} deals with data` : "no data"}
+          accent={financialMetrics?.avgDscr != null
+            ? financialMetrics.avgDscr >= 1.5 ? "green"
+            : financialMetrics.avgDscr < 1.25 ? "red"
+            : "amber"
+            : undefined}
+        />
+        <MetricCard
+          label="DSCR Below 1.25x"
+          value={financialMetrics?.dscrBelow125 ?? "—"}
+          sub="may not qualify for financing"
+          accent={financialMetrics?.dscrBelow125 && financialMetrics.dscrBelow125 > 0 ? "red" : undefined}
+        />
+        <MetricCard
+          label="High Rent Deals"
+          value={financialMetrics?.rentAbove20 ?? "—"}
+          sub="rent > 20% of gross revenue"
+          accent={financialMetrics?.rentAbove20 && financialMetrics.rentAbove20 > 0 ? "amber" : undefined}
+        />
+        <MetricCard
+          label="Avg. Cash-on-Cash"
+          value={financialMetrics?.avgCoc != null ? (financialMetrics.avgCoc * 100).toFixed(1) + "%" : "—"}
+          sub="across all financed deals"
+          accent={financialMetrics?.avgCoc != null
+            ? financialMetrics.avgCoc >= 0.15 ? "green"
+            : financialMetrics.avgCoc < 0.08 ? "red"
+            : "amber"
+            : undefined}
         />
       </div>
 
