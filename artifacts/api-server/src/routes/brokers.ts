@@ -121,7 +121,7 @@ router.get("/brokers/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [broker] = await db.select().from(brokersTable).where(eq(brokersTable.id, id));
-    if (!broker) return res.status(404).json({ error: "Not found" });
+    if (!broker) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichBroker(broker);
     res.json(enriched);
   } catch (err) {
@@ -139,7 +139,7 @@ router.patch("/brokers/:id", async (req, res) => {
       .set({ ...body, updatedAt: new Date() })
       .where(eq(brokersTable.id, id))
       .returning();
-    if (!broker) return res.status(404).json({ error: "Not found" });
+    if (!broker) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichBroker(broker);
     res.json(enriched);
   } catch (err) {
@@ -156,7 +156,7 @@ router.delete("/brokers/:id", async (req, res) => {
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(eq(brokersTable.id, id))
       .returning();
-    if (!broker) return res.status(404).json({ error: "Not found" });
+    if (!broker) res.status(404).json({ error: "Not found" }); return;
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -172,7 +172,7 @@ router.post("/brokers/:id/archive", async (req, res) => {
       .set({ archivedAt: new Date(), deletedAt: null, updatedAt: new Date() })
       .where(eq(brokersTable.id, id))
       .returning();
-    if (!broker) return res.status(404).json({ error: "Not found" });
+    if (!broker) res.status(404).json({ error: "Not found" }); return;
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -188,7 +188,7 @@ router.post("/brokers/:id/restore", async (req, res) => {
       .set({ deletedAt: null, archivedAt: null, updatedAt: new Date() })
       .where(eq(brokersTable.id, id))
       .returning();
-    if (!broker) return res.status(404).json({ error: "Not found" });
+    if (!broker) res.status(404).json({ error: "Not found" }); return;
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -237,7 +237,7 @@ router.post("/brokers/:id/delete-reassign", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { reassignToBrokerId } = req.body as { reassignToBrokerId: number };
-    if (!reassignToBrokerId) return res.status(400).json({ error: "reassignToBrokerId required" });
+    if (!reassignToBrokerId) res.status(400).json({ error: "reassignToBrokerId required" }); return;
     await db.update(dealsTable).set({ brokerId: reassignToBrokerId, updatedAt: new Date() }).where(eq(dealsTable.brokerId, id));
     await db.update(brokersTable).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(brokersTable.id, id));
     res.json({ success: true });

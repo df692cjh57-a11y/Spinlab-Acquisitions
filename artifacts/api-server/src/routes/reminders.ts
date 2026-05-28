@@ -89,7 +89,7 @@ router.get("/reminders/:id", async (req, res) => {
       .select()
       .from(remindersTable)
       .where(eq(remindersTable.id, id));
-    if (!reminder) return res.status(404).json({ error: "Not found" });
+    if (!reminder) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichReminder(reminder);
     res.json(enriched);
   } catch (err) {
@@ -107,7 +107,7 @@ router.patch("/reminders/:id", async (req, res) => {
       .set({ ...body, updatedAt: new Date() })
       .where(eq(remindersTable.id, id))
       .returning();
-    if (!reminder) return res.status(404).json({ error: "Not found" });
+    if (!reminder) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichReminder(reminder);
     res.json(enriched);
   } catch (err) {
@@ -135,7 +135,7 @@ router.patch("/reminders/:id/complete", async (req, res) => {
       .set({ completed: true, completedAt: new Date(), updatedAt: new Date() })
       .where(eq(remindersTable.id, id))
       .returning();
-    if (!reminder) return res.status(404).json({ error: "Not found" });
+    if (!reminder) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichReminder(reminder);
     res.json(enriched);
   } catch (err) {

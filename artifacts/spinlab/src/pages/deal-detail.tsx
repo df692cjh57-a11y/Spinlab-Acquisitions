@@ -938,15 +938,15 @@ function RedFlagsTab({ dealId }: { dealId: number }) {
 
   if (isLoading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>;
 
-  const activeCount = flags?.filter((f) => f.isFlagged).length || 0;
+  const activeCount = flags?.filter((f) => f.checked).length || 0;
   const riskCls = activeCount >= 9 ? "bg-red-50 text-red-700 border-red-200" : activeCount >= 6 ? "bg-orange-50 text-orange-700 border-orange-200" : activeCount >= 3 ? "bg-yellow-50 text-yellow-700 border-yellow-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
   const handleFlagChange = (flagKey: string, isChecked: boolean) => {
     if (!flags) return;
-    const cur = flags.map((f) => ({ flagKey: f.flagKey, isFlagged: f.isFlagged, notes: f.notes }));
+    const cur = flags.map((f) => ({ flagKey: f.flagKey, checked: f.checked }));
     const ex = cur.find((f) => f.flagKey === flagKey);
-    if (ex) ex.isFlagged = isChecked;
-    else cur.push({ flagKey, isFlagged: isChecked, notes: "" });
+    if (ex) ex.checked = isChecked;
+    else cur.push({ flagKey, checked: isChecked });
     updateFlags.mutate({ id: dealId, data: { flags: cur } }, {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealRedFlagsQueryKey(dealId) }); qc.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) }); },
     });
@@ -962,7 +962,7 @@ function RedFlagsTab({ dealId }: { dealId: number }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
         {RED_FLAG_LIST.map((flag) => {
-          const isFlagged = flags?.find((f) => f.flagKey === flag)?.isFlagged || false;
+          const isFlagged = flags?.find((f) => f.flagKey === flag)?.checked || false;
           return (
             <div key={flag} className={`flex items-start gap-2.5 p-2 rounded transition-colors ${isFlagged ? "bg-red-50" : "hover:bg-muted/30"}`}>
               <Checkbox id={`flag-${flag}`} checked={isFlagged} onCheckedChange={(c) => handleFlagChange(flag, c as boolean)} />
@@ -996,7 +996,7 @@ function DocumentsTab({ dealId }: { dealId: number }) {
           <div key={doc.id} className="flex items-center justify-between py-2.5">
             <div className="flex items-center gap-2.5">
               <FileCheck className={`w-4 h-4 ${["Received","Reviewed"].includes(doc.status) ? "text-emerald-500" : "text-muted-foreground"}`} />
-              <span className="text-sm">{doc.documentLabel}</span>
+              <span className="text-sm">{doc.docLabel}</span>
             </div>
             <Select value={doc.status} onValueChange={(v) => { updateDoc.mutate({ id: doc.id, data: { status: v } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListDocumentsQueryKey({ dealId }) }) }); }}>
               <SelectTrigger className={`w-[150px] h-7 text-[10px] font-semibold uppercase tracking-wider ${statusCls(doc.status)}`}>
@@ -1022,7 +1022,7 @@ function NotesTab({ dealId }: { dealId: number }) {
 
   const handleSubmit = () => {
     if (!content.trim()) return;
-    createNote.mutate({ data: { linkedType: "deal", linkedId: dealId, noteType, content } as any }, {
+    createNote.mutate({ data: { linkedType: "deal", linkedId: dealId, noteType, noteText: content } }, {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getListNotesQueryKey({ linkedType: "deal", linkedId: dealId }) }); setContent(""); },
     });
   };
@@ -1050,7 +1050,7 @@ function NotesTab({ dealId }: { dealId: number }) {
                 <span className="text-[10px] px-1.5 py-0.5 border border-border rounded text-muted-foreground font-medium">{note.noteType}</span>
                 <span className="text-xs text-muted-foreground">{new Date(note.createdAt).toLocaleString()}</span>
               </div>
-              <div className="text-sm whitespace-pre-wrap">{note.content}</div>
+              <div className="text-sm whitespace-pre-wrap">{note.noteText}</div>
             </div>
           ))}
       </div>
@@ -1074,7 +1074,7 @@ function RemindersTab({ dealId }: { dealId: number }) {
 
   const handleAdd = () => {
     if (!title || !dueDate) return;
-    createReminder.mutate({ data: { title, dueDate, priority, linkedType: "deal", linkedId: dealId, completed: false } }, {
+    createReminder.mutate({ data: { title, dueDate, priority, linkedType: "deal", linkedId: dealId } }, {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: "deal", linkedId: dealId }) }); setIsAdding(false); setTitle(""); setDueDate(""); },
     });
   };
@@ -1223,7 +1223,7 @@ export default function DealDetail() {
           <AlertDialogFooter className="gap-2 sm:gap-2">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => setArchiveOpen(false) || (setDeleteOpen(false), handleArchiveDeal())}
+              onClick={() => { setArchiveOpen(false); setDeleteOpen(false); handleArchiveDeal(); }}
               className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
             >
               <Archive className="w-3.5 h-3.5 mr-1.5" />Archive instead

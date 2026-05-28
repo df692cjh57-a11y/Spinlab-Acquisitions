@@ -5,6 +5,10 @@
  * Spinlab Deal Desk API
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardSummaryHotDealsListItem } from './dashboardSummaryHotDealsListItem';
+import type { DashboardSummaryOverdueFollowUpsListItem } from './dashboardSummaryOverdueFollowUpsListItem';
+import type { DashboardSummaryRecentlyAddedDealsItem } from './dashboardSummaryRecentlyAddedDealsItem';
+import type { DashboardSummaryTopBrokersItem } from './dashboardSummaryTopBrokersItem';
 import type { Deal } from './deal';
 import type { Reminder } from './reminder';
 
@@ -22,6 +26,12 @@ export interface DashboardSummary {
   /** @nullable */
   avgAskingMultiple: number | null;
   stalledDeals: number;
+  /** @nullable */
+  totalPipelineValue?: number | null;
   recentDeals: Deal[];
   todayReminders: Reminder[];
+  hotDealsList?: DashboardSummaryHotDealsListItem[];
+  overdueFollowUpsList?: DashboardSummaryOverdueFollowUpsListItem[];
+  recentlyAddedDeals?: DashboardSummaryRecentlyAddedDealsItem[];
+  topBrokers?: DashboardSummaryTopBrokersItem[];
 }

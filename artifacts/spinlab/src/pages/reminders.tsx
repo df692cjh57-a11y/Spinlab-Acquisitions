@@ -210,7 +210,7 @@ export default function RemindersPage() {
 
   const handleComplete = (id: number) => {
     completeReminder.mutate(
-      { id, data: { completed: true } as any },
+      { id },
       { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListRemindersQueryKey() }); } }
     );
   };

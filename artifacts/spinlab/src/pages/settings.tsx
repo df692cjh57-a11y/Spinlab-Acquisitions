@@ -16,7 +16,7 @@ import { formatCurrency } from "@/lib/format";
 import {
   getDeletedDeals, getArchivedDeals, restoreDeal, permanentlyDeleteDeal,
   getDeletedBrokers, getArchivedBrokers, restoreBroker, permanentlyDeleteBroker,
-  archiveDeal, archiveBroker,
+  softDeleteBroker, archiveDeal, archiveBroker,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 

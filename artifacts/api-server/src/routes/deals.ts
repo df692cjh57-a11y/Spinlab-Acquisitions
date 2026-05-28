@@ -18,11 +18,48 @@ import {
 
 const router = Router();
 
+// ─── Numeric field names that must be stored as strings in Drizzle numeric cols ──
+const NUMERIC_FIELDS = new Set([
+  "askingPrice", "grossRevenue", "netIncome", "sellerClaimedNetIncome",
+  "adjustedNetIncome", "targetMultiple",
+  "washFoldRevenue", "pickupDeliveryRevenue", "commercialRevenue",
+  "vendingRevenue", "otherRevenue",
+  "payroll", "monthlyRent", "water", "gas", "electric", "insurance",
+  "repairsMaintenance", "supplies", "merchantFees", "softwareFees",
+  "marketing", "cleaning", "accounting", "licensesPermits", "otherExpenses",
+  "adjustedPayroll", "replacementManagerSalary", "capexReserve",
+  "maintenanceReserve", "otherBuyerAdjustments",
+  "squareFootage", "leaseYearsRemaining",
+  "downPaymentPercent", "interestRate", "loanTermYears", "amortizationYears",
+  "closingCostPercent", "sbaFees", "workingCapitalReserve", "capexBudget",
+  "sellerFinancingAmount", "sellerFinancingInterestRate",
+  "sellerFinancingAmortizationYears",
+  "avgMachineAge", "averageWasherReplacementCost", "averageDryerReplacementCost",
+  "percentMachinesNeedingReplacement", "installationBudget", "capexContingencyPercent",
+  "washFoldRevenueIncrease", "pickupDeliveryRevenueIncrease",
+  "commercialRevenueIncrease", "priceIncreasePercent",
+  "hoursExpansionRevenueIncrease", "laborSavings", "utilitySavings", "otherUpside",
+]);
+
+/** Convert a number → string for Drizzle numeric columns; null/undefined pass through. */
+function numStr(v: number | null | undefined): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  return String(v);
+}
+
+/** Parse a Drizzle numeric string back to number | null for API responses. */
+function n(v: string | null | undefined): number | null {
+  if (v == null || v === "") return null;
+  const f = parseFloat(v);
+  return isFinite(f) ? f : null;
+}
+
 function calcAskingMultiple(askingPrice: string | null, adjustedNetIncome: string | null): number | null {
   const p = parseFloat(askingPrice ?? "");
-  const n = parseFloat(adjustedNetIncome ?? "");
-  if (!p || !n) return null;
-  return Math.round((p / n) * 100) / 100;
+  const ni = parseFloat(adjustedNetIncome ?? "");
+  if (!p || !ni) return null;
+  return Math.round((p / ni) * 100) / 100;
 }
 
 function calcRentAsPercentGross(annualRent: number | null, grossRevenue: string | null): number | null {
@@ -107,14 +144,73 @@ async function enrichDeal(deal: typeof dealsTable.$inferSelect) {
     brokerName,
     annualRent,
     rentPerSqFt,
-    askingPrice: deal.askingPrice ? parseFloat(deal.askingPrice) : null,
-    grossRevenue: deal.grossRevenue ? parseFloat(deal.grossRevenue) : null,
-    netIncome: deal.netIncome ? parseFloat(deal.netIncome) : null,
-    adjustedNetIncome: deal.adjustedNetIncome ? parseFloat(deal.adjustedNetIncome) : null,
-    monthlyRent: deal.monthlyRent ? parseFloat(deal.monthlyRent) : null,
-    leaseYearsRemaining: deal.leaseYearsRemaining ? parseFloat(deal.leaseYearsRemaining) : null,
-    squareFootage: deal.squareFootage ? parseFloat(deal.squareFootage) : null,
-    avgMachineAge: deal.avgMachineAge ? parseFloat(deal.avgMachineAge) : null,
+    // ── Basic financials ────────────────────────────────────────────────────
+    askingPrice:               n(deal.askingPrice),
+    grossRevenue:              n(deal.grossRevenue),
+    netIncome:                 n(deal.netIncome),
+    sellerClaimedNetIncome:    n(deal.sellerClaimedNetIncome),
+    adjustedNetIncome:         n(deal.adjustedNetIncome),
+    targetMultiple:            n(deal.targetMultiple),
+    // ── Revenue detail ──────────────────────────────────────────────────────
+    washFoldRevenue:           n(deal.washFoldRevenue),
+    pickupDeliveryRevenue:     n(deal.pickupDeliveryRevenue),
+    commercialRevenue:         n(deal.commercialRevenue),
+    vendingRevenue:            n(deal.vendingRevenue),
+    otherRevenue:              n(deal.otherRevenue),
+    // ── Expense detail ──────────────────────────────────────────────────────
+    payroll:                   n(deal.payroll),
+    monthlyRent:               n(deal.monthlyRent),
+    water:                     n(deal.water),
+    gas:                       n(deal.gas),
+    electric:                  n(deal.electric),
+    insurance:                 n(deal.insurance),
+    repairsMaintenance:        n(deal.repairsMaintenance),
+    supplies:                  n(deal.supplies),
+    merchantFees:              n(deal.merchantFees),
+    softwareFees:              n(deal.softwareFees),
+    marketing:                 n(deal.marketing),
+    cleaning:                  n(deal.cleaning),
+    accounting:                n(deal.accounting),
+    licensesPermits:           n(deal.licensesPermits),
+    otherExpenses:             n(deal.otherExpenses),
+    // ── Buyer adjustments ───────────────────────────────────────────────────
+    adjustedPayroll:           n(deal.adjustedPayroll),
+    replacementManagerSalary:  n(deal.replacementManagerSalary),
+    capexReserve:              n(deal.capexReserve),
+    maintenanceReserve:        n(deal.maintenanceReserve),
+    otherBuyerAdjustments:     n(deal.otherBuyerAdjustments),
+    // ── Real estate / lease ─────────────────────────────────────────────────
+    squareFootage:             n(deal.squareFootage),
+    leaseYearsRemaining:       n(deal.leaseYearsRemaining),
+    // ── Financing ───────────────────────────────────────────────────────────
+    downPaymentPercent:              n(deal.downPaymentPercent),
+    interestRate:                    n(deal.interestRate),
+    loanTermYears:                   n(deal.loanTermYears),
+    amortizationYears:               n(deal.amortizationYears),
+    closingCostPercent:              n(deal.closingCostPercent),
+    sbaFees:                         n(deal.sbaFees),
+    workingCapitalReserve:           n(deal.workingCapitalReserve),
+    capexBudget:                     n(deal.capexBudget),
+    sellerFinancingAmount:           n(deal.sellerFinancingAmount),
+    sellerFinancingInterestRate:     n(deal.sellerFinancingInterestRate),
+    sellerFinancingAmortizationYears: n(deal.sellerFinancingAmortizationYears),
+    // ── Equipment ───────────────────────────────────────────────────────────
+    avgMachineAge:                       n(deal.avgMachineAge),
+    averageWasherReplacementCost:        n(deal.averageWasherReplacementCost),
+    averageDryerReplacementCost:         n(deal.averageDryerReplacementCost),
+    percentMachinesNeedingReplacement:   n(deal.percentMachinesNeedingReplacement),
+    installationBudget:                  n(deal.installationBudget),
+    capexContingencyPercent:             n(deal.capexContingencyPercent),
+    // ── Upside ──────────────────────────────────────────────────────────────
+    washFoldRevenueIncrease:       n(deal.washFoldRevenueIncrease),
+    pickupDeliveryRevenueIncrease: n(deal.pickupDeliveryRevenueIncrease),
+    commercialRevenueIncrease:     n(deal.commercialRevenueIncrease),
+    priceIncreasePercent:          n(deal.priceIncreasePercent),
+    hoursExpansionRevenueIncrease: n(deal.hoursExpansionRevenueIncrease),
+    laborSavings:                  n(deal.laborSavings),
+    utilitySavings:                n(deal.utilitySavings),
+    otherUpside:                   n(deal.otherUpside),
+    // ── Computed ────────────────────────────────────────────────────────────
     askingMultiple: calcAskingMultiple(deal.askingPrice, deal.adjustedNetIncome),
     rentAsPercentGross: calcRentAsPercentGross(annualRent, deal.grossRevenue),
     redFlagScore,
@@ -158,6 +254,20 @@ async function initDealDocuments(dealId: number) {
       status: "Not requested",
     }))
   );
+}
+
+/** Build an insert/update payload, converting all numeric fields to strings for Drizzle. */
+function toDbValues(body: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(body)) {
+    if (val === undefined) continue;
+    if (NUMERIC_FIELDS.has(key)) {
+      result[key] = val === null ? null : String(val);
+    } else {
+      result[key] = val;
+    }
+  }
+  return result;
 }
 
 // GET /deals — active only (not deleted, not archived)
@@ -233,20 +343,10 @@ router.get("/deals/archived", async (req, res) => {
 router.post("/deals", async (req, res) => {
   try {
     const body = CreateDealBody.parse(req.body);
+    const values = toDbValues(body as Record<string, unknown>);
     const [deal] = await db
       .insert(dealsTable)
-      .values({
-        ...body,
-        askingPrice: body.askingPrice != null ? String(body.askingPrice) : undefined,
-        grossRevenue: body.grossRevenue != null ? String(body.grossRevenue) : undefined,
-        netIncome: body.netIncome != null ? String(body.netIncome) : undefined,
-        adjustedNetIncome: body.adjustedNetIncome != null ? String(body.adjustedNetIncome) : undefined,
-        monthlyRent: body.monthlyRent != null ? String(body.monthlyRent) : undefined,
-        leaseYearsRemaining: body.leaseYearsRemaining != null ? String(body.leaseYearsRemaining) : undefined,
-        squareFootage: body.squareFootage != null ? String(body.squareFootage) : undefined,
-        avgMachineAge: body.avgMachineAge != null ? String(body.avgMachineAge) : undefined,
-        updatedAt: new Date(),
-      })
+      .values({ ...values, updatedAt: new Date() } as typeof dealsTable.$inferInsert)
       .returning();
     await initDealRedFlags(deal.id);
     await initDealDocuments(deal.id);
@@ -262,7 +362,7 @@ router.get("/deals/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [deal] = await db.select().from(dealsTable).where(eq(dealsTable.id, id));
-    if (!deal) return res.status(404).json({ error: "Not found" });
+    if (!deal) res.status(404).json({ error: "Not found" }); return;
     await initDealRedFlags(deal.id);
     await initDealDocuments(deal.id);
     const enriched = await enrichDeal(deal);
@@ -277,22 +377,18 @@ router.patch("/deals/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const body = UpdateDealBody.parse(req.body);
-    const updateData: Record<string, unknown> = { ...body, updatedAt: new Date() };
-    if (body.askingPrice != null) updateData.askingPrice = String(body.askingPrice);
-    if (body.grossRevenue != null) updateData.grossRevenue = String(body.grossRevenue);
-    if (body.netIncome != null) updateData.netIncome = String(body.netIncome);
-    if (body.adjustedNetIncome != null) updateData.adjustedNetIncome = String(body.adjustedNetIncome);
-    if (body.monthlyRent != null) updateData.monthlyRent = String(body.monthlyRent);
-    if (body.leaseYearsRemaining != null) updateData.leaseYearsRemaining = String(body.leaseYearsRemaining);
-    if (body.squareFootage != null) updateData.squareFootage = String(body.squareFootage);
-    if (body.avgMachineAge != null) updateData.avgMachineAge = String(body.avgMachineAge);
+    const updateData = {
+      ...toDbValues(body as Record<string, unknown>),
+      updatedAt: new Date(),
+    };
 
     const [deal] = await db
       .update(dealsTable)
-      .set(updateData as Parameters<typeof dealsTable.$inferSelect>[0])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .set(updateData as any)
       .where(eq(dealsTable.id, id))
       .returning();
-    if (!deal) return res.status(404).json({ error: "Not found" });
+    if (!deal) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichDeal(deal);
     res.json(enriched);
   } catch (err) {
@@ -309,7 +405,7 @@ router.delete("/deals/:id", async (req, res) => {
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(eq(dealsTable.id, id))
       .returning();
-    if (!deal) return res.status(404).json({ error: "Not found" });
+    if (!deal) res.status(404).json({ error: "Not found" }); return;
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -325,7 +421,7 @@ router.post("/deals/:id/archive", async (req, res) => {
       .set({ archivedAt: new Date(), deletedAt: null, updatedAt: new Date() })
       .where(eq(dealsTable.id, id))
       .returning();
-    if (!deal) return res.status(404).json({ error: "Not found" });
+    if (!deal) res.status(404).json({ error: "Not found" }); return;
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -341,7 +437,7 @@ router.post("/deals/:id/restore", async (req, res) => {
       .set({ deletedAt: null, archivedAt: null, updatedAt: new Date() })
       .where(eq(dealsTable.id, id))
       .returning();
-    if (!deal) return res.status(404).json({ error: "Not found" });
+    if (!deal) res.status(404).json({ error: "Not found" }); return;
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

@@ -87,6 +87,108 @@ export interface Deal {
   redFlagLevel?: string;
   dealScore?: number;
   dealQuality?: string;
+  /** @nullable */
+  sellerClaimedNetIncome?: number | null;
+  /** @nullable */
+  targetMultiple?: number | null;
+  /** @nullable */
+  washFoldRevenue?: number | null;
+  /** @nullable */
+  pickupDeliveryRevenue?: number | null;
+  /** @nullable */
+  commercialRevenue?: number | null;
+  /** @nullable */
+  vendingRevenue?: number | null;
+  /** @nullable */
+  otherRevenue?: number | null;
+  /** @nullable */
+  payroll?: number | null;
+  /** @nullable */
+  water?: number | null;
+  /** @nullable */
+  gas?: number | null;
+  /** @nullable */
+  electric?: number | null;
+  /** @nullable */
+  insurance?: number | null;
+  /** @nullable */
+  repairsMaintenance?: number | null;
+  /** @nullable */
+  supplies?: number | null;
+  /** @nullable */
+  merchantFees?: number | null;
+  /** @nullable */
+  softwareFees?: number | null;
+  /** @nullable */
+  marketing?: number | null;
+  /** @nullable */
+  cleaning?: number | null;
+  /** @nullable */
+  accounting?: number | null;
+  /** @nullable */
+  licensesPermits?: number | null;
+  /** @nullable */
+  otherExpenses?: number | null;
+  /** @nullable */
+  adjustedPayroll?: number | null;
+  /** @nullable */
+  replacementManagerSalary?: number | null;
+  /** @nullable */
+  capexReserve?: number | null;
+  /** @nullable */
+  maintenanceReserve?: number | null;
+  /** @nullable */
+  otherBuyerAdjustments?: number | null;
+  /** @nullable */
+  realEstateIncluded?: boolean | null;
+  /** @nullable */
+  downPaymentPercent?: number | null;
+  /** @nullable */
+  interestRate?: number | null;
+  /** @nullable */
+  loanTermYears?: number | null;
+  /** @nullable */
+  amortizationYears?: number | null;
+  /** @nullable */
+  closingCostPercent?: number | null;
+  /** @nullable */
+  sbaFees?: number | null;
+  /** @nullable */
+  workingCapitalReserve?: number | null;
+  /** @nullable */
+  capexBudget?: number | null;
+  /** @nullable */
+  sellerFinancingAmount?: number | null;
+  /** @nullable */
+  sellerFinancingInterestRate?: number | null;
+  /** @nullable */
+  sellerFinancingAmortizationYears?: number | null;
+  /** @nullable */
+  averageWasherReplacementCost?: number | null;
+  /** @nullable */
+  averageDryerReplacementCost?: number | null;
+  /** @nullable */
+  percentMachinesNeedingReplacement?: number | null;
+  /** @nullable */
+  installationBudget?: number | null;
+  /** @nullable */
+  capexContingencyPercent?: number | null;
+  /** @nullable */
+  washFoldRevenueIncrease?: number | null;
+  /** @nullable */
+  pickupDeliveryRevenueIncrease?: number | null;
+  /** @nullable */
+  commercialRevenueIncrease?: number | null;
+  /** @nullable */
+  priceIncreasePercent?: number | null;
+  /** @nullable */
+  hoursExpansionRevenueIncrease?: number | null;
+  /** @nullable */
+  laborSavings?: number | null;
+  /** @nullable */
+  utilitySavings?: number | null;
+  /** @nullable */
+  otherUpside?: number | null;
   createdAt: string;
   updatedAt: string;
 }

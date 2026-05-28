@@ -674,6 +674,8 @@ components:
           type: ["number", "null"]
         stalledDeals:
           type: integer
+        totalPipelineValue:
+          type: ["number", "null"]
         recentDeals:
           type: array
           items:
@@ -682,6 +684,22 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Reminder"
+        hotDealsList:
+          type: array
+          items:
+            type: object
+        overdueFollowUpsList:
+          type: array
+          items:
+            type: object
+        recentlyAddedDeals:
+          type: array
+          items:
+            type: object
+        topBrokers:
+          type: array
+          items:
+            type: object
 
     PipelineStage:
       type: object
@@ -793,6 +811,108 @@ components:
           type: integer
         dealQuality:
           type: string
+        sellerClaimedNetIncome:
+          type: ["number", "null"]
+        targetMultiple:
+          type: ["number", "null"]
+        washFoldRevenue:
+          type: ["number", "null"]
+        pickupDeliveryRevenue:
+          type: ["number", "null"]
+        commercialRevenue:
+          type: ["number", "null"]
+        vendingRevenue:
+          type: ["number", "null"]
+        otherRevenue:
+          type: ["number", "null"]
+        payroll:
+          type: ["number", "null"]
+        water:
+          type: ["number", "null"]
+        gas:
+          type: ["number", "null"]
+        electric:
+          type: ["number", "null"]
+        insurance:
+          type: ["number", "null"]
+        repairsMaintenance:
+          type: ["number", "null"]
+        supplies:
+          type: ["number", "null"]
+        merchantFees:
+          type: ["number", "null"]
+        softwareFees:
+          type: ["number", "null"]
+        marketing:
+          type: ["number", "null"]
+        cleaning:
+          type: ["number", "null"]
+        accounting:
+          type: ["number", "null"]
+        licensesPermits:
+          type: ["number", "null"]
+        otherExpenses:
+          type: ["number", "null"]
+        adjustedPayroll:
+          type: ["number", "null"]
+        replacementManagerSalary:
+          type: ["number", "null"]
+        capexReserve:
+          type: ["number", "null"]
+        maintenanceReserve:
+          type: ["number", "null"]
+        otherBuyerAdjustments:
+          type: ["number", "null"]
+        realEstateIncluded:
+          type: ["boolean", "null"]
+        downPaymentPercent:
+          type: ["number", "null"]
+        interestRate:
+          type: ["number", "null"]
+        loanTermYears:
+          type: ["number", "null"]
+        amortizationYears:
+          type: ["number", "null"]
+        closingCostPercent:
+          type: ["number", "null"]
+        sbaFees:
+          type: ["number", "null"]
+        workingCapitalReserve:
+          type: ["number", "null"]
+        capexBudget:
+          type: ["number", "null"]
+        sellerFinancingAmount:
+          type: ["number", "null"]
+        sellerFinancingInterestRate:
+          type: ["number", "null"]
+        sellerFinancingAmortizationYears:
+          type: ["number", "null"]
+        averageWasherReplacementCost:
+          type: ["number", "null"]
+        averageDryerReplacementCost:
+          type: ["number", "null"]
+        percentMachinesNeedingReplacement:
+          type: ["number", "null"]
+        installationBudget:
+          type: ["number", "null"]
+        capexContingencyPercent:
+          type: ["number", "null"]
+        washFoldRevenueIncrease:
+          type: ["number", "null"]
+        pickupDeliveryRevenueIncrease:
+          type: ["number", "null"]
+        commercialRevenueIncrease:
+          type: ["number", "null"]
+        priceIncreasePercent:
+          type: ["number", "null"]
+        hoursExpansionRevenueIncrease:
+          type: ["number", "null"]
+        laborSavings:
+          type: ["number", "null"]
+        utilitySavings:
+          type: ["number", "null"]
+        otherUpside:
+          type: ["number", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -870,6 +990,108 @@ components:
           type: ["string", "null"]
         notes:
           type: string
+        sellerClaimedNetIncome:
+          type: ["number", "null"]
+        targetMultiple:
+          type: ["number", "null"]
+        washFoldRevenue:
+          type: ["number", "null"]
+        pickupDeliveryRevenue:
+          type: ["number", "null"]
+        commercialRevenue:
+          type: ["number", "null"]
+        vendingRevenue:
+          type: ["number", "null"]
+        otherRevenue:
+          type: ["number", "null"]
+        payroll:
+          type: ["number", "null"]
+        water:
+          type: ["number", "null"]
+        gas:
+          type: ["number", "null"]
+        electric:
+          type: ["number", "null"]
+        insurance:
+          type: ["number", "null"]
+        repairsMaintenance:
+          type: ["number", "null"]
+        supplies:
+          type: ["number", "null"]
+        merchantFees:
+          type: ["number", "null"]
+        softwareFees:
+          type: ["number", "null"]
+        marketing:
+          type: ["number", "null"]
+        cleaning:
+          type: ["number", "null"]
+        accounting:
+          type: ["number", "null"]
+        licensesPermits:
+          type: ["number", "null"]
+        otherExpenses:
+          type: ["number", "null"]
+        adjustedPayroll:
+          type: ["number", "null"]
+        replacementManagerSalary:
+          type: ["number", "null"]
+        capexReserve:
+          type: ["number", "null"]
+        maintenanceReserve:
+          type: ["number", "null"]
+        otherBuyerAdjustments:
+          type: ["number", "null"]
+        realEstateIncluded:
+          type: ["boolean", "null"]
+        downPaymentPercent:
+          type: ["number", "null"]
+        interestRate:
+          type: ["number", "null"]
+        loanTermYears:
+          type: ["number", "null"]
+        amortizationYears:
+          type: ["number", "null"]
+        closingCostPercent:
+          type: ["number", "null"]
+        sbaFees:
+          type: ["number", "null"]
+        workingCapitalReserve:
+          type: ["number", "null"]
+        capexBudget:
+          type: ["number", "null"]
+        sellerFinancingAmount:
+          type: ["number", "null"]
+        sellerFinancingInterestRate:
+          type: ["number", "null"]
+        sellerFinancingAmortizationYears:
+          type: ["number", "null"]
+        averageWasherReplacementCost:
+          type: ["number", "null"]
+        averageDryerReplacementCost:
+          type: ["number", "null"]
+        percentMachinesNeedingReplacement:
+          type: ["number", "null"]
+        installationBudget:
+          type: ["number", "null"]
+        capexContingencyPercent:
+          type: ["number", "null"]
+        washFoldRevenueIncrease:
+          type: ["number", "null"]
+        pickupDeliveryRevenueIncrease:
+          type: ["number", "null"]
+        commercialRevenueIncrease:
+          type: ["number", "null"]
+        priceIncreasePercent:
+          type: ["number", "null"]
+        hoursExpansionRevenueIncrease:
+          type: ["number", "null"]
+        laborSavings:
+          type: ["number", "null"]
+        utilitySavings:
+          type: ["number", "null"]
+        otherUpside:
+          type: ["number", "null"]
 
     DealUpdate:
       type: object
@@ -942,6 +1164,108 @@ components:
           type: ["string", "null"]
         notes:
           type: string
+        sellerClaimedNetIncome:
+          type: ["number", "null"]
+        targetMultiple:
+          type: ["number", "null"]
+        washFoldRevenue:
+          type: ["number", "null"]
+        pickupDeliveryRevenue:
+          type: ["number", "null"]
+        commercialRevenue:
+          type: ["number", "null"]
+        vendingRevenue:
+          type: ["number", "null"]
+        otherRevenue:
+          type: ["number", "null"]
+        payroll:
+          type: ["number", "null"]
+        water:
+          type: ["number", "null"]
+        gas:
+          type: ["number", "null"]
+        electric:
+          type: ["number", "null"]
+        insurance:
+          type: ["number", "null"]
+        repairsMaintenance:
+          type: ["number", "null"]
+        supplies:
+          type: ["number", "null"]
+        merchantFees:
+          type: ["number", "null"]
+        softwareFees:
+          type: ["number", "null"]
+        marketing:
+          type: ["number", "null"]
+        cleaning:
+          type: ["number", "null"]
+        accounting:
+          type: ["number", "null"]
+        licensesPermits:
+          type: ["number", "null"]
+        otherExpenses:
+          type: ["number", "null"]
+        adjustedPayroll:
+          type: ["number", "null"]
+        replacementManagerSalary:
+          type: ["number", "null"]
+        capexReserve:
+          type: ["number", "null"]
+        maintenanceReserve:
+          type: ["number", "null"]
+        otherBuyerAdjustments:
+          type: ["number", "null"]
+        realEstateIncluded:
+          type: ["boolean", "null"]
+        downPaymentPercent:
+          type: ["number", "null"]
+        interestRate:
+          type: ["number", "null"]
+        loanTermYears:
+          type: ["number", "null"]
+        amortizationYears:
+          type: ["number", "null"]
+        closingCostPercent:
+          type: ["number", "null"]
+        sbaFees:
+          type: ["number", "null"]
+        workingCapitalReserve:
+          type: ["number", "null"]
+        capexBudget:
+          type: ["number", "null"]
+        sellerFinancingAmount:
+          type: ["number", "null"]
+        sellerFinancingInterestRate:
+          type: ["number", "null"]
+        sellerFinancingAmortizationYears:
+          type: ["number", "null"]
+        averageWasherReplacementCost:
+          type: ["number", "null"]
+        averageDryerReplacementCost:
+          type: ["number", "null"]
+        percentMachinesNeedingReplacement:
+          type: ["number", "null"]
+        installationBudget:
+          type: ["number", "null"]
+        capexContingencyPercent:
+          type: ["number", "null"]
+        washFoldRevenueIncrease:
+          type: ["number", "null"]
+        pickupDeliveryRevenueIncrease:
+          type: ["number", "null"]
+        commercialRevenueIncrease:
+          type: ["number", "null"]
+        priceIncreasePercent:
+          type: ["number", "null"]
+        hoursExpansionRevenueIncrease:
+          type: ["number", "null"]
+        laborSavings:
+          type: ["number", "null"]
+        utilitySavings:
+          type: ["number", "null"]
+        otherUpside:
+          type: ["number", "null"]
 
     # ─── RED FLAGS ─────────────────────────────────────────────────────────
     RedFlag:

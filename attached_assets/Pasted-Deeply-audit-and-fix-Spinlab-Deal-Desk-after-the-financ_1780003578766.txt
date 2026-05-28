@@ -1,0 +1,85 @@
+Deeply audit and fix Spinlab Deal Desk after the financial underwriting upgrade.
+
+Main problem:
+The frontend and DB schema now include many upgraded underwriting fields, but the OpenAPI spec, generated API client/Zod schemas, and API route persistence still only support the older basic deal fields. This likely prevents the Financials form from saving most underwriting inputs.
+
+Fix all of this end-to-end:
+
+1. Update `lib/api-spec/openapi.yaml`
+Add the full upgraded deal financial fields to `Deal`, `DealInput`, and `DealUpdate`, including:
+- sellerClaimedNetIncome
+- sellerClaimedAddBacks
+- targetMultiple
+- washFoldRevenue, pickupDeliveryRevenue, commercialRevenue, vendingRevenue, otherRevenue
+- payroll, water, gas, electric, insurance, repairsMaintenance, supplies, merchantFees, softwareFees, marketing, cleaning, accounting, licensesPermits, otherExpenses
+- adjustedPayroll, replacementManagerSalary, capexReserve, maintenanceReserve, otherBuyerAdjustments
+- downPaymentPercent, interestRate, loanTermYears, amortizationYears, closingCostPercent, sbaFees, workingCapitalReserve, capexBudget
+- sellerFinancingAmount, sellerFinancingInterestRate, sellerFinancingAmortizationYears
+- averageWasherReplacementCost, averageDryerReplacementCost, percentMachinesNeedingReplacement, installationBudget, capexContingencyPercent
+- washFoldRevenueIncrease, pickupDeliveryRevenueIncrease, commercialRevenueIncrease, priceIncreasePercent, hoursExpansionRevenueIncrease, laborSavings, utilitySavings, otherUpside
+- realEstateIncluded if missing
+
+2. Regenerate API code
+Run the existing codegen command:
+`pnpm --filter @workspace/api-spec run codegen`
+
+Verify generated types in:
+- `lib/api-client-react`
+- `lib/api-zod`
+
+The generated `Deal`, `DealInput`, and `DealUpdate` types must include the upgraded fields.
+
+3. Fix API persistence
+In `artifacts/api-server/src/routes/deals.ts`, update POST `/deals` and PATCH `/deals/:id` so every numeric underwriting field is correctly converted to string for Drizzle numeric columns before insert/update.
+
+Do not only handle the old fields. Include every numeric deal field from the DB schema.
+
+Also ensure nullable fields can be cleared to `null`; do not accidentally ignore `null` updates.
+
+4. Fix API responses
+Make sure `enrichDeal()` returns all upgraded numeric fields as numbers/null, not raw strings, so the frontend receives usable values.
+
+5. Remove duplicate/stale scoring math
+The frontend uses `calculateFullUnderwriting()` from `artifacts/spinlab/src/lib/financialCalculations.ts`.
+Avoid adding duplicate financial formulas in UI components.
+If backend lightweight scores remain, make sure they do not conflict with frontend financial underwriting displays.
+
+6. Clean corrupted text
+Search for mojibake/corrupted strings like:
+- `â€”`
+- `Â·`
+- `ðŸ`
+- `â‰¤`
+- `1â€“2`
+
+Fix user-facing strings in:
+- `artifacts/spinlab/src/lib/financialCalculations.ts`
+- `artifacts/spinlab/src/pages/deal-detail.tsx`
+- any generated comments/spec docs where safe
+
+Use normal readable characters, for example:
+- em dash or hyphen
+- bullet/dot
+- `<=`
+- `1-2`
+
+7. Verify
+Run:
+`pnpm run typecheck`
+`pnpm run build`
+
+Then run the app and manually test:
+- create/edit a deal
+- open Financials tab
+- save detailed revenue/expense/financing/equipment/upside fields
+- reload the deal
+- confirm all saved values persist
+- confirm underwriting metrics update without NaN/Infinity
+- confirm no corrupted characters appear in the UI
+
+Acceptance criteria:
+- Financials form persists every upgraded underwriting field.
+- API spec, generated client types, Zod validation, DB schema, API routes, and frontend are aligned.
+- Typecheck and build pass.
+- No NaN/Infinity appears in underwriting UI.
+- No visible mojibake/corrupted text remains.

@@ -268,7 +268,7 @@ function BrokerNotesTab({ brokerId }: { brokerId: number }) {
 
   const handleSubmit = () => {
     if (!content.trim()) return;
-    createNote.mutate({ data: { linkedType: "broker", linkedId: brokerId, noteType, content } as any }, {
+    createNote.mutate({ data: { linkedType: "broker", linkedId: brokerId, noteType, noteText: content } }, {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getListNotesQueryKey({ linkedType: "broker", linkedId: brokerId }) }); setContent(""); },
     });
   };
@@ -296,7 +296,7 @@ function BrokerNotesTab({ brokerId }: { brokerId: number }) {
                 <span className="text-[10px] px-1.5 py-0.5 border border-border rounded text-muted-foreground font-medium">{note.noteType}</span>
                 <span className="text-xs text-muted-foreground">{new Date(note.createdAt).toLocaleString()}</span>
               </div>
-              <div className="text-sm whitespace-pre-wrap">{note.content}</div>
+              <div className="text-sm whitespace-pre-wrap">{note.noteText}</div>
             </div>
           ))}
       </div>
@@ -316,7 +316,7 @@ function BrokerRemindersTab({ brokerId }: { brokerId: number }) {
 
   const handleAdd = () => {
     if (!title || !dueDate) return;
-    createReminder.mutate({ data: { title, dueDate, priority, linkedType: "broker", linkedId: brokerId, completed: false } }, {
+    createReminder.mutate({ data: { title, dueDate, priority, linkedType: "broker", linkedId: brokerId } }, {
       onSuccess: () => { qc.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: "broker", linkedId: brokerId }) }); setIsAdding(false); setTitle(""); setDueDate(""); },
     });
   };

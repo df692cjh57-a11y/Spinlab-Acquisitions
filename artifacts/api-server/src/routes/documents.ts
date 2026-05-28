@@ -40,7 +40,7 @@ router.patch("/documents/:id", async (req, res) => {
       .set({ ...body, updatedAt: new Date() })
       .where(eq(documentsTable.id, id))
       .returning();
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (!doc) res.status(404).json({ error: "Not found" }); return;
     res.json(formatDoc(doc));
   } catch (err) {
     res.status(400).json({ error: String(err) });

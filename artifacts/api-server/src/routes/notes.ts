@@ -75,7 +75,7 @@ router.patch("/notes/:id", async (req, res) => {
       .set(body)
       .where(eq(notesTable.id, id))
       .returning();
-    if (!note) return res.status(404).json({ error: "Not found" });
+    if (!note) res.status(404).json({ error: "Not found" }); return;
     const enriched = await enrichNote(note);
     res.json(enriched);
   } catch (err) {
