@@ -1,0 +1,638 @@
+Upgrade Spinlab Deal Desk with automatic laundromat underwriting math.
+
+Important:
+- Do not rebuild the app from scratch.
+- Keep the current design, pages, database, CRUD, reminders, brokers, notes, delete/archive/restore, and email features.
+- Add the financial calculations in a clean, reusable way.
+- Create helper functions for calculations instead of repeating formulas inside components.
+- Prevent NaN, Infinity, divide-by-zero, and broken numbers from appearing in the UI.
+- If a calculation cannot be made, show: “Not enough data.”
+
+The goal is to turn each deal detail page into a simple laundromat acquisition underwriting screen.
+
+--------------------------------
+1. ADD / CONFIRM DEAL INPUT FIELDS
+--------------------------------
+
+Each deal should support these fields.
+
+Basic financials:
+- asking_price
+- gross_revenue
+- seller_claimed_net_income
+- adjusted_sde
+- target_multiple
+
+Revenue detail:
+- wash_fold_revenue
+- pickup_delivery_revenue
+- commercial_revenue
+- vending_revenue
+- other_revenue
+
+Expense detail:
+- payroll
+- monthly_rent
+- water
+- gas
+- electric
+- insurance
+- repairs_maintenance
+- supplies
+- merchant_fees
+- software_fees
+- marketing
+- cleaning
+- accounting
+- licenses_permits
+- other_expenses
+
+Buyer adjustments:
+- adjusted_payroll
+- replacement_manager_salary
+- capex_reserve
+- maintenance_reserve
+- other_buyer_adjustments
+
+Real estate / lease:
+- square_feet
+- lease_years_remaining
+- renewal_options
+- real_estate_included
+
+Financing:
+- down_payment_percent
+- interest_rate
+- loan_term_years
+- amortization_years
+- closing_cost_percent
+- sba_fees
+- working_capital_reserve
+- capex_budget
+- seller_financing_amount
+- seller_financing_interest_rate
+- seller_financing_amortization_years
+
+Equipment:
+- washer_count
+- dryer_count
+- average_machine_age
+- average_washer_replacement_cost
+- average_dryer_replacement_cost
+- percent_machines_needing_replacement
+- installation_budget
+- capex_contingency_percent
+
+Upside:
+- wash_fold_revenue_increase
+- pickup_delivery_revenue_increase
+- commercial_revenue_increase
+- price_increase_percent
+- hours_expansion_revenue_increase
+- labor_savings
+- utility_savings
+- other_upside
+
+Set defaults:
+- target_multiple = 3.5
+- down_payment_percent = 10
+- interest_rate = 10
+- loan_term_years = 10
+- amortization_years = 10
+- closing_cost_percent = 3
+- working_capital_reserve = 0 unless entered
+- capex_budget = 0
+- average_washer_replacement_cost = 8000
+- average_dryer_replacement_cost = 5000
+- capex_contingency_percent = 10
+
+--------------------------------
+2. CREATE FINANCIAL CALCULATION HELPERS
+--------------------------------
+
+Create a dedicated file for formulas.
+
+Example:
+- src/lib/financialCalculations.ts
+or
+- src/utils/financialCalculations.ts
+
+Add helper functions:
+
+formatCurrency(value)
+formatPercent(value)
+formatMultiple(value)
+safeDivide(numerator, denominator)
+calculateMonthlyPayment(principal, annualInterestRate, amortizationYears)
+calculateDealFinancials(deal)
+
+Do not duplicate formulas in multiple components.
+
+--------------------------------
+3. CORE FORMULAS
+--------------------------------
+
+Inside calculateDealFinancials(deal), calculate:
+
+Annual Rent =
+monthly_rent * 12
+
+Revenue Breakdown Total =
+wash_fold_revenue
++ pickup_delivery_revenue
++ commercial_revenue
++ vending_revenue
++ other_revenue
+
+Total Utilities =
+water + gas + electric
+
+Total Operating Expenses =
+payroll
++ annual_rent
++ water
++ gas
++ electric
++ insurance
++ repairs_maintenance
++ supplies
++ merchant_fees
++ software_fees
++ marketing
++ cleaning
++ accounting
++ licenses_permits
++ other_expenses
+
+Adjusted Operating Expenses =
+adjusted_payroll
++ annual_rent
++ water
++ gas
++ electric
++ insurance
++ repairs_maintenance
++ supplies
++ merchant_fees
++ software_fees
++ marketing
++ cleaning
++ accounting
++ licenses_permits
++ replacement_manager_salary
++ capex_reserve
++ maintenance_reserve
++ other_buyer_adjustments
+
+Important:
+If adjusted operating expenses are missing or equal to 0, fall back to total operating expenses.
+
+Adjusted SDE =
+gross_revenue - adjusted_operating_expenses
+
+If the user manually enters adjusted_sde, use the manual adjusted_sde as the primary value.
+
+Net Margin =
+adjusted_sde / gross_revenue
+
+Expense Ratio =
+total_operating_expenses / gross_revenue
+
+Utility % of Gross =
+total_utilities / gross_revenue
+
+Payroll % of Gross =
+payroll / gross_revenue
+
+Rent % of Gross =
+annual_rent / gross_revenue
+
+Rent Per Square Foot =
+annual_rent / square_feet
+
+--------------------------------
+4. VALUATION FORMULAS
+--------------------------------
+
+Calculate:
+
+Asking Multiple =
+asking_price / adjusted_sde
+
+Seller Claimed Multiple =
+asking_price / seller_claimed_net_income
+
+Revenue Multiple =
+asking_price / gross_revenue
+
+Max Offer =
+adjusted_sde * target_multiple
+
+Price Gap =
+asking_price - max_offer
+
+Price Gap % =
+price_gap / asking_price
+
+Low Valuation =
+adjusted_sde * 2.5
+
+Base Valuation =
+adjusted_sde * 3.5
+
+Aggressive Valuation =
+adjusted_sde * 4.5
+
+Show:
+- Low valuation
+- Base valuation
+- Aggressive valuation
+- Max offer
+- Price gap
+
+--------------------------------
+5. SBA / DEBT FORMULAS
+--------------------------------
+
+Calculate:
+
+Down Payment =
+asking_price * down_payment_percent / 100
+
+Seller Financing Amount =
+seller_financing_amount
+
+Loan Amount =
+asking_price - down_payment - seller_financing_amount
+
+Closing Costs =
+asking_price * closing_cost_percent / 100
+
+Total Cash Needed =
+down_payment
++ closing_costs
++ sba_fees
++ working_capital_reserve
++ capex_budget
+
+Bank Monthly Debt Service =
+standard amortizing payment using:
+loan_amount
+interest_rate
+amortization_years
+
+Seller Financing Monthly Payment =
+standard amortizing payment using:
+seller_financing_amount
+seller_financing_interest_rate
+seller_financing_amortization_years
+
+Total Monthly Debt Service =
+bank_monthly_debt_service + seller_financing_monthly_payment
+
+Annual Debt Service =
+total_monthly_debt_service * 12
+
+Cash Flow After Debt =
+adjusted_sde - annual_debt_service
+
+Monthly Cash Flow After Debt =
+cash_flow_after_debt / 12
+
+DSCR =
+adjusted_sde / annual_debt_service
+
+Cash-on-Cash Return =
+cash_flow_after_debt / total_cash_needed
+
+Break-even Revenue =
+total_operating_expenses + annual_debt_service
+
+Break-even Revenue % =
+break_even_revenue / gross_revenue
+
+Monthly payment formula:
+
+Monthly Payment =
+P * [r(1+r)^n] / [(1+r)^n - 1]
+
+Where:
+P = principal
+r = monthly interest rate
+n = total monthly payments
+
+Handle 0% interest safely:
+If interest rate is 0, monthly payment = principal / n
+
+--------------------------------
+6. SCENARIO ANALYSIS
+--------------------------------
+
+Add three scenarios:
+
+Downside Case:
+- Revenue decreases by 10%
+- Expenses increase by 5%
+- Debt service stays the same
+
+Base Case:
+- Current adjusted SDE
+- Current debt service
+
+Upside Case:
+- Revenue increases by 15%
+- Expenses increase by 5%
+- Debt service stays the same
+
+For each scenario calculate:
+- revenue
+- operating_expenses
+- adjusted_sde
+- annual_debt_service
+- cash_flow_after_debt
+- dscr
+- cash_on_cash_return
+
+Show a table:
+
+Scenario | Revenue | Adjusted SDE | Debt Service | Cash Flow | DSCR | CoC Return
+
+--------------------------------
+7. UPSIDE MODEL
+--------------------------------
+
+Calculate:
+
+Revenue Upside =
+wash_fold_revenue_increase
++ pickup_delivery_revenue_increase
++ commercial_revenue_increase
++ hours_expansion_revenue_increase
++ other_upside
+
+Price Increase Upside =
+gross_revenue * price_increase_percent / 100
+
+Cost Savings =
+labor_savings + utility_savings
+
+Projected Revenue =
+gross_revenue + revenue_upside + price_increase_upside
+
+Projected Adjusted SDE =
+adjusted_sde + revenue_upside + price_increase_upside + cost_savings
+
+Projected Multiple =
+asking_price / projected_adjusted_sde
+
+Projected Cash Flow After Debt =
+projected_adjusted_sde - annual_debt_service
+
+Projected Cash-on-Cash Return =
+projected_cash_flow_after_debt / total_cash_needed
+
+--------------------------------
+8. EQUIPMENT CAPEX MODEL
+--------------------------------
+
+Calculate:
+
+Machines Needing Replacement % =
+percent_machines_needing_replacement / 100
+
+Washer Replacement Cost =
+washer_count * machines_needing_replacement_percent * average_washer_replacement_cost
+
+Dryer Replacement Cost =
+dryer_count * machines_needing_replacement_percent * average_dryer_replacement_cost
+
+Capex Subtotal =
+washer_replacement_cost
++ dryer_replacement_cost
++ installation_budget
+
+Capex Contingency =
+capex_subtotal * capex_contingency_percent / 100
+
+Total Equipment Capex =
+capex_subtotal + capex_contingency
+
+Capex Adjusted Cash Needed =
+total_cash_needed + total_equipment_capex
+
+Capex Adjusted Cash-on-Cash Return =
+cash_flow_after_debt / capex_adjusted_cash_needed
+
+--------------------------------
+9. OFFER RECOMMENDATION
+--------------------------------
+
+Add a suggested offer calculation.
+
+Start with:
+Suggested Multiple = 3.5
+
+Adjustments:
+- Add 0.5 if deal_score >= 80
+- Add 0.25 if lease_years_remaining >= 10
+- Add 0.25 if average_machine_age <= 7
+- Subtract 0.5 if red_flag_score >= 6
+- Subtract 0.5 if rent_percent_gross >= 20%
+- Subtract 0.5 if lease_years_remaining < 5
+- Subtract 0.25 if average_machine_age > 12
+- Subtract 0.5 if dscr < 1.25
+- Subtract 0.25 if cash_on_cash_return < 10%
+
+Clamp suggested multiple:
+- Minimum: 2.0
+- Maximum: 5.0
+
+Suggested Offer =
+adjusted_sde * suggested_multiple
+
+Offer Recommendation:
+
+If asking_price <= suggested_offer:
+“Price may be workable.”
+
+If asking_price is 0% to 15% above suggested_offer:
+“Negotiate. Gap is not impossible.”
+
+If asking_price is 15% to 35% above suggested_offer:
+“Large pricing gap. Needs seller financing or major upside.”
+
+If asking_price is more than 35% above suggested_offer:
+“Likely overpriced unless seller numbers are proven or upside is exceptional.”
+
+--------------------------------
+10. WARNING LOGIC
+--------------------------------
+
+Add clean warning badges in the underwriting tab.
+
+Warnings:
+
+If DSCR < 1.25:
+“DSCR below 1.25x. Financing may be difficult.”
+
+If DSCR < 1.10:
+“High risk: deal may not support debt.”
+
+If cash_on_cash_return < 10%:
+“Low cash-on-cash return relative to acquisition risk.”
+
+If total_cash_needed > asking_price * 25%:
+“High cash requirement.”
+
+If rent_percent_gross > 20%:
+“Rent is high relative to revenue.”
+
+If asking_multiple > 5:
+“Asking multiple is aggressive.”
+
+If seller_claimed_net_income exists and adjusted_sde is more than 25% lower:
+“Seller net may be overstated.”
+
+If average_machine_age > 12:
+“Machine age suggests possible major capex.”
+
+If total_equipment_capex > asking_price * 20%:
+“Equipment replacement may materially change the deal.”
+
+If lease_years_remaining < 5:
+“Lease term may be too short for acquisition financing.”
+
+If gross_revenue is missing:
+“Gross revenue missing.”
+
+If adjusted_sde is missing:
+“Adjusted SDE missing.”
+
+If monthly_rent is missing:
+“Rent missing.”
+
+If broker is missing:
+“Broker missing.”
+
+If next_action is missing:
+“Next action missing.”
+
+--------------------------------
+11. UI CHANGES
+--------------------------------
+
+On the Deal Detail page, add or improve a tab called:
+
+Financials / Underwriting
+
+Inside the tab, use clean sections:
+
+1. Summary Metrics
+2. Revenue
+3. Expenses
+4. Valuation
+5. Financing
+6. Returns
+7. Scenarios
+8. Upside
+9. Equipment Capex
+10. Suggested Offer
+11. Warnings
+
+Keep it clean and Tesla-like:
+- white cards
+- gray borders
+- black text
+- subtle badges
+- compact tables
+- no clutter
+
+Summary Metrics should show:
+- Asking price
+- Gross revenue
+- Adjusted SDE
+- Asking multiple
+- Rent % of gross
+- DSCR
+- Cash-on-cash return
+- Max offer
+- Suggested offer
+- Price gap
+
+--------------------------------
+12. DEALS TABLE UPDATES
+--------------------------------
+
+Add optional financial columns to the Deals table:
+
+- Asking Multiple
+- Rent %
+- DSCR
+- Cash-on-Cash
+- Max Offer
+- Suggested Offer
+- Price Gap
+- Deal Score
+- Red Flag Score
+
+If optional columns are too complex, add the most important ones only:
+- Asking Multiple
+- Rent %
+- DSCR
+- Cash-on-Cash
+- Suggested Offer
+
+--------------------------------
+13. DASHBOARD METRICS
+--------------------------------
+
+Add dashboard cards:
+
+- Total Pipeline Value
+- Average Asking Multiple
+- Average Deal Score
+- Average Red Flag Score
+- Average DSCR
+- Average Cash-on-Cash Return
+- Deals with DSCR below 1.25
+- Deals with rent above 20% of gross
+- Deals above 5.0x asking multiple
+
+Use only active, non-deleted, non-archived deals.
+
+--------------------------------
+14. DATA SAFETY
+--------------------------------
+
+Important implementation rules:
+
+- Store raw user inputs in the database.
+- Calculated fields can be computed live in helper functions.
+- Do not store calculated values unless the app already stores them.
+- All calculations must update when deal inputs change.
+- Use safe parsing for numbers.
+- Treat blank fields as 0 only where appropriate.
+- For ratios, if denominator is missing or zero, return null and display “Not enough data.”
+- Never show NaN.
+- Never show Infinity.
+- Never crash the app because of missing numbers.
+
+--------------------------------
+15. FINAL CHECK
+--------------------------------
+
+After implementing, verify:
+
+- App still runs
+- Deals page still works
+- Deal detail page still works
+- Brokers still work
+- Reminders still work
+- Notes still work
+- Delete/archive/restore still works
+- Email tools still work
+- Financial calculations update automatically
+- No NaN or Infinity appears
+- Missing values show “Not enough data”
+- Dashboard metrics update correctly
+- UI remains clean and premium

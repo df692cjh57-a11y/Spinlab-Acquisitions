@@ -1,5 +1,5 @@
 import { useParams, Link } from "wouter";
-import { 
+import {
   useGetDeal, useUpdateDeal, getGetDealQueryKey,
   useGetDealRedFlags, useUpdateDealRedFlags, getGetDealRedFlagsQueryKey,
   useListDocuments, useUpdateDocument, getListDocumentsQueryKey,
@@ -8,955 +8,1171 @@ import {
   useListBrokers
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, useRef, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatPercent, formatDateShort, isOverdue } from "@/lib/format";
+import { useState } from "react";
+import { formatCurrency, formatDateShort, isOverdue } from "@/lib/format";
+import { calculateDealFinancials } from "@/lib/financialCalculations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, FileText, Check, FileCheck, CircleDashed, PhoneCall, Calendar } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, FileCheck,
+  CircleDashed, TrendingUp, DollarSign, Zap, AlertOctagon, Info
+} from "lucide-react";
 
-function getRiskColor(level: string | undefined) {
-  switch (level) {
-    case "Clean": return "bg-green-50 text-green-700 border-green-200";
-    case "Caution": return "bg-yellow-50 text-yellow-700 border-yellow-200";
-    case "High Risk": return "bg-orange-50 text-orange-700 border-orange-200";
-    case "Dangerous": return "bg-red-50 text-red-700 border-red-200";
-    default: return "bg-gray-100 text-gray-700 border-gray-200";
-  }
-}
-
-function getQualityColor(score: number | undefined) {
-  if (score === undefined || score === null) return "bg-gray-100 text-gray-700 border-gray-200";
-  if (score >= 80) return "bg-green-50 text-green-700 border-green-200";
-  if (score >= 60) return "bg-blue-50 text-blue-700 border-blue-200";
-  if (score >= 40) return "bg-yellow-50 text-yellow-700 border-yellow-200";
-  return "bg-red-50 text-red-700 border-red-200";
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ALL_STATUSES = [
-  "New Lead", "Reviewing Info", "Initial Call", "Underwriting", "Site Visit", 
-  "Drafting LOI", "LOI Sent", "LOI Negotiating", "Under Contract", "Due Diligence",
-  "Financing", "Closing Prep", "Closed", "Dead Deal", "Stalled", "Pass"
+  "New Lead","Contacted Broker","NDA Sent","Financials Requested","Financials Received",
+  "Underwriting","Site Visit Scheduled","LOI Sent","Negotiation","Under Contract",
+  "Due Diligence","Financing","Closed","Dead Deal","Follow Up Later","Stalled",
 ];
 
-export default function DealDetail() {
-  const { id } = useParams();
-  const dealId = parseInt(id || "0", 10);
-  const queryClient = useQueryClient();
+function nd(v: string | number | null | undefined, fmt?: (n: number) => string): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  if (!isFinite(n)) return "Not enough data";
+  return fmt ? fmt(n) : String(n);
+}
 
-  const { data: deal, isLoading } = useGetDeal(dealId, { query: { enabled: !!dealId, queryKey: getGetDealQueryKey(dealId) } });
+function fmtPct(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function fmtX(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return `${v.toFixed(2)}x`;
+}
+
+function Metric({ label, value, sub, accent }: { label: string; value: React.ReactNode; sub?: string; accent?: "green" | "red" | "amber" | "blue" }) {
+  const cls = accent === "green" ? "text-emerald-600" : accent === "red" ? "text-red-600" : accent === "amber" ? "text-amber-600" : accent === "blue" ? "text-primary" : "text-foreground";
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{label}</div>
+      <div className={`text-lg font-bold ${cls}`}>{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="px-5 py-3 border-b border-border bg-muted/20">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{title}</span>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function WarningBadge({ level, message }: { level: "info" | "warn" | "danger"; message: string }) {
+  const conf = {
+    info: { cls: "bg-blue-50 text-blue-700 border-blue-200", Icon: Info },
+    warn: { cls: "bg-amber-50 text-amber-700 border-amber-200", Icon: AlertTriangle },
+    danger: { cls: "bg-red-50 text-red-700 border-red-200", Icon: AlertOctagon },
+  }[level];
+  return (
+    <div className={`flex items-start gap-2.5 px-3 py-2.5 rounded border text-xs font-medium ${conf.cls}`}>
+      <conf.Icon className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+      {message}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cls = status === "Closed" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : ["Dead Deal","Stalled"].includes(status) ? "bg-red-50 text-red-600 border-red-200"
+    : ["Under Contract","Due Diligence","Financing","LOI Sent","Negotiation"].includes(status) ? "bg-purple-50 text-purple-700 border-purple-200"
+    : "bg-blue-50 text-blue-700 border-blue-200";
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>{status}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const cls = priority === "Hot" ? "bg-rose-50 text-rose-700 border-rose-200"
+    : priority === "High" ? "bg-amber-50 text-amber-700 border-amber-200"
+    : priority === "Medium" ? "bg-blue-50 text-blue-700 border-blue-100"
+    : "bg-gray-50 text-gray-500 border-gray-200";
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>{priority}</span>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Underwriting Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+function UnderwritingTab({ deal }: { deal: any }) {
+  const fin = calculateDealFinancials({
+    ...deal,
+    dealScore: deal.dealScore,
+    redFlagScore: deal.redFlagScore,
+  });
+
+  const offerColor = fin.offerRecommendation.startsWith("Price may")
+    ? "text-emerald-600" : fin.offerRecommendation.startsWith("Negotiate")
+    ? "text-amber-600" : "text-red-600";
+
+  return (
+    <div className="space-y-5">
+      {/* Warnings — show at top if any exist */}
+      {fin.warnings.length > 0 && (
+        <SectionCard title={`Warnings · ${fin.warnings.length}`}>
+          <div className="space-y-2">
+            {fin.warnings.map((w, i) => <WarningBadge key={i} level={w.level} message={w.message} />)}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Summary Metrics */}
+      <SectionCard title="Summary Metrics">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-5">
+          <Metric label="Asking Price" value={formatCurrency(fin.askingPrice)} />
+          <Metric label="Gross Revenue" value={formatCurrency(fin.grossRevenue)} />
+          <Metric label="Adjusted SDE" value={formatCurrency(fin.adjustedSDE)} accent="blue" />
+          <Metric
+            label="Asking Multiple"
+            value={fmtX(fin.askingMultiple)}
+            accent={fin.askingMultiple ? fin.askingMultiple > 5 ? "red" : fin.askingMultiple < 3.5 ? "green" : undefined : undefined}
+          />
+          <Metric
+            label="Rent % of Gross"
+            value={fmtPct(fin.rentPctGross)}
+            accent={fin.rentPctGross ? fin.rentPctGross > 0.20 ? "red" : fin.rentPctGross < 0.12 ? "green" : undefined : undefined}
+          />
+          <Metric
+            label="DSCR"
+            value={fin.dscr !== null ? fin.dscr.toFixed(2) + "x" : "—"}
+            accent={fin.dscr ? fin.dscr >= 1.5 ? "green" : fin.dscr < 1.25 ? "red" : "amber" : undefined}
+          />
+          <Metric
+            label="Cash-on-Cash"
+            value={fmtPct(fin.cashOnCashReturn)}
+            accent={fin.cashOnCashReturn ? fin.cashOnCashReturn >= 0.15 ? "green" : fin.cashOnCashReturn < 0.10 ? "red" : "amber" : undefined}
+          />
+          <Metric label="Max Offer" value={formatCurrency(fin.maxOffer)} sub={`at ${fin.targetMultiple}x`} />
+          <Metric label="Suggested Offer" value={formatCurrency(fin.suggestedOffer)} sub={`at ${fin.suggestedMultiple.toFixed(2)}x`} accent="blue" />
+          <Metric
+            label="Price Gap"
+            value={fin.priceGap !== null ? formatCurrency(fin.priceGap) : "—"}
+            sub={fin.priceGapPct !== null ? fmtPct(fin.priceGapPct) + " above max" : undefined}
+            accent={fin.priceGap !== null ? fin.priceGap > 0 ? "red" : "green" : undefined}
+          />
+        </div>
+      </SectionCard>
+
+      {/* Revenue */}
+      <SectionCard title="Revenue">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric label="Gross Revenue" value={formatCurrency(fin.grossRevenue)} />
+          <Metric label="Revenue Breakdown Total" value={fin.revenueBreakdownTotal ? formatCurrency(fin.revenueBreakdownTotal) : "—"} />
+          <Metric label="Net Margin" value={fmtPct(fin.netMargin)} accent={fin.netMargin ? fin.netMargin >= 0.3 ? "green" : fin.netMargin < 0.15 ? "red" : undefined : undefined} />
+          <Metric label="Revenue Multiple" value={fmtX(fin.revenueMultiple)} />
+        </div>
+      </SectionCard>
+
+      {/* Expenses */}
+      <SectionCard title="Expenses">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric label="Total Op. Expenses" value={formatCurrency(fin.totalOperatingExpenses)} />
+          <Metric label="Adj. Op. Expenses" value={formatCurrency(fin.adjustedOperatingExpenses)} />
+          <Metric label="Expense Ratio" value={fmtPct(fin.expenseRatio)} accent={fin.expenseRatio ? fin.expenseRatio > 0.7 ? "red" : undefined : undefined} />
+          <Metric label="Annual Rent" value={formatCurrency(fin.annualRent)} />
+          <Metric label="Total Utilities" value={formatCurrency(fin.totalUtilities)} />
+          <Metric label="Utility % of Gross" value={fmtPct(fin.utilityPctGross)} />
+          <Metric label="Payroll % of Gross" value={fmtPct(fin.payrollPctGross)} />
+          <Metric label="Rent / Sq Ft" value={fin.rentPerSqFt ? `$${fin.rentPerSqFt.toFixed(2)}/sqft` : "—"} />
+        </div>
+      </SectionCard>
+
+      {/* Valuation */}
+      <SectionCard title="Valuation">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric label="Asking Multiple" value={fmtX(fin.askingMultiple)} />
+          <Metric label="Seller Claimed Multiple" value={fmtX(fin.sellerClaimedMultiple)} />
+          <Metric label="Revenue Multiple" value={fmtX(fin.revenueMultiple)} />
+          <Metric label="Target Multiple" value={fmtX(fin.targetMultiple)} />
+          <Metric label="Low Valuation (2.5x)" value={formatCurrency(fin.lowValuation)} />
+          <Metric label="Base Valuation (3.5x)" value={formatCurrency(fin.baseValuation)} accent="blue" />
+          <Metric label="Aggressive (4.5x)" value={formatCurrency(fin.aggressiveValuation)} />
+          <Metric label="Max Offer" value={formatCurrency(fin.maxOffer)} sub={`at ${fin.targetMultiple}x target`} />
+          <Metric label="Price Gap" value={fin.priceGap !== null ? formatCurrency(fin.priceGap) : "—"} accent={fin.priceGap !== null ? fin.priceGap > 0 ? "red" : "green" : undefined} />
+          <Metric label="Price Gap %" value={fmtPct(fin.priceGapPct)} />
+        </div>
+      </SectionCard>
+
+      {/* Financing */}
+      <SectionCard title="Financing">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric label="Down Payment" value={formatCurrency(fin.downPayment)} />
+          <Metric label="Loan Amount" value={formatCurrency(fin.loanAmount)} />
+          <Metric label="Closing Costs" value={formatCurrency(fin.closingCosts)} />
+          <Metric label="Total Cash Needed" value={formatCurrency(fin.totalCashNeeded)} accent="amber" />
+          <Metric label="Bank Monthly Payment" value={formatCurrency(fin.bankMonthlyDebtService)} />
+          {fin.sellerFinancingMonthlyPayment !== null && (
+            <Metric label="Seller Fin. Monthly" value={formatCurrency(fin.sellerFinancingMonthlyPayment)} />
+          )}
+          <Metric label="Total Monthly Debt" value={formatCurrency(fin.totalMonthlyDebtService)} />
+          <Metric label="Annual Debt Service" value={formatCurrency(fin.annualDebtService)} />
+        </div>
+      </SectionCard>
+
+      {/* Returns */}
+      <SectionCard title="Returns">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric
+            label="Cash Flow After Debt"
+            value={formatCurrency(fin.cashFlowAfterDebt)}
+            accent={fin.cashFlowAfterDebt !== null ? fin.cashFlowAfterDebt >= 0 ? "green" : "red" : undefined}
+          />
+          <Metric label="Monthly Net Cash Flow" value={formatCurrency(fin.monthlyNetCashFlow)} />
+          <Metric
+            label="DSCR"
+            value={fin.dscr !== null ? fin.dscr.toFixed(2) + "x" : "—"}
+            sub="≥ 1.25 preferred"
+            accent={fin.dscr !== null ? fin.dscr >= 1.5 ? "green" : fin.dscr < 1.25 ? "red" : "amber" : undefined}
+          />
+          <Metric
+            label="Cash-on-Cash Return"
+            value={fmtPct(fin.cashOnCashReturn)}
+            sub="≥ 15% target"
+            accent={fin.cashOnCashReturn !== null ? fin.cashOnCashReturn >= 0.15 ? "green" : fin.cashOnCashReturn < 0.10 ? "red" : "amber" : undefined}
+          />
+          <Metric label="Break-Even Revenue" value={formatCurrency(fin.breakEvenRevenue)} />
+          <Metric label="Break-Even Rev %" value={fmtPct(fin.breakEvenRevenuePct)} />
+        </div>
+      </SectionCard>
+
+      {/* Scenario Analysis */}
+      <SectionCard title="Scenario Analysis">
+        {fin.scenarios.every((s) => s.adjustedSDE === null) ? (
+          <div className="text-sm text-muted-foreground py-2">Not enough data for scenario analysis.</div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 pr-4 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Scenario</th>
+                <th className="text-right py-2 px-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Revenue</th>
+                <th className="text-right py-2 px-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Adj. SDE</th>
+                <th className="text-right py-2 px-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Debt Service</th>
+                <th className="text-right py-2 px-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Cash Flow</th>
+                <th className="text-right py-2 px-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">DSCR</th>
+                <th className="text-right py-2 pl-3 text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">CoC Return</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fin.scenarios.map((s) => {
+                const isBase = s.label === "Base";
+                const cfColor = s.cashFlowAfterDebt !== null ? s.cashFlowAfterDebt >= 0 ? "text-emerald-600" : "text-red-600" : "text-muted-foreground";
+                const dscrColor = s.dscr !== null ? s.dscr >= 1.5 ? "text-emerald-600" : s.dscr < 1.25 ? "text-red-600" : "text-amber-600" : "text-muted-foreground";
+                return (
+                  <tr key={s.label} className={`border-b border-border/50 last:border-0 ${isBase ? "bg-blue-50/40" : ""}`}>
+                    <td className="py-3 pr-4">
+                      <span className={`text-sm font-semibold ${isBase ? "text-primary" : "text-foreground"}`}>{s.label}</span>
+                    </td>
+                    <td className="py-3 px-3 text-right text-sm">{formatCurrency(s.revenue)}</td>
+                    <td className="py-3 px-3 text-right text-sm font-medium">{formatCurrency(s.adjustedSDE)}</td>
+                    <td className="py-3 px-3 text-right text-sm text-muted-foreground">{formatCurrency(s.annualDebtService)}</td>
+                    <td className={`py-3 px-3 text-right text-sm font-semibold ${cfColor}`}>{formatCurrency(s.cashFlowAfterDebt)}</td>
+                    <td className={`py-3 px-3 text-right text-sm font-semibold ${dscrColor}`}>
+                      {s.dscr !== null ? s.dscr.toFixed(2) + "x" : "—"}
+                    </td>
+                    <td className="py-3 pl-3 text-right text-sm">{fmtPct(s.cashOnCash)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
+
+      {/* Upside Model */}
+      <SectionCard title="Upside Model">
+        {fin.projectedRevenue === null && fin.projectedAdjustedSDE === null ? (
+          <div className="text-sm text-muted-foreground py-2">Enter upside inputs in the Financials tab to model upside.</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Metric label="Revenue Upside" value={formatCurrency(fin.revenueUpside)} />
+            <Metric label="Price Increase Upside" value={formatCurrency(fin.priceIncreaseUpside)} />
+            <Metric label="Cost Savings" value={formatCurrency(fin.costSavings)} />
+            <Metric label="Projected Revenue" value={formatCurrency(fin.projectedRevenue)} accent="green" />
+            <Metric label="Projected Adj. SDE" value={formatCurrency(fin.projectedAdjustedSDE)} accent="green" />
+            <Metric label="Projected Multiple" value={fmtX(fin.projectedMultiple)} />
+            <Metric label="Projected CF After Debt" value={formatCurrency(fin.projectedCashFlowAfterDebt)} accent={fin.projectedCashFlowAfterDebt !== null ? fin.projectedCashFlowAfterDebt >= 0 ? "green" : "red" : undefined} />
+            <Metric label="Projected CoC Return" value={fmtPct(fin.projectedCashOnCash)} />
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Equipment Capex */}
+      <SectionCard title="Equipment Capex">
+        {!fin.totalEquipmentCapex ? (
+          <div className="text-sm text-muted-foreground py-2">Enter equipment data (washer/dryer count, % needing replacement) to estimate capex.</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Metric label="Washer Replacement" value={formatCurrency(fin.washerReplacementCost)} />
+            <Metric label="Dryer Replacement" value={formatCurrency(fin.dryerReplacementCost)} />
+            <Metric label="Capex Subtotal" value={formatCurrency(fin.capexSubtotal)} />
+            <Metric label="Contingency" value={formatCurrency(fin.capexContingency)} />
+            <Metric label="Total Equipment Capex" value={formatCurrency(fin.totalEquipmentCapex)} accent={fin.totalEquipmentCapex !== null && fin.askingPrice !== null && fin.totalEquipmentCapex > fin.askingPrice * 0.20 ? "red" : undefined} />
+            <Metric label="Capex Adj. Cash Needed" value={formatCurrency(fin.capexAdjustedCashNeeded)} />
+            <Metric label="Capex Adj. CoC Return" value={fmtPct(fin.capexAdjustedCashOnCash)} />
+          </div>
+        )}
+      </SectionCard>
+
+      {/* Suggested Offer */}
+      <SectionCard title="Suggested Offer">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1 space-y-3">
+            <div className="flex items-center gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Suggested Multiple</div>
+                <div className="text-3xl font-bold text-foreground">{fin.suggestedMultiple.toFixed(2)}x</div>
+              </div>
+              <div className="w-px h-12 bg-border" />
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Suggested Offer</div>
+                <div className="text-3xl font-bold text-primary">{formatCurrency(fin.suggestedOffer)}</div>
+              </div>
+              {fin.askingPrice && fin.suggestedOffer && (
+                <>
+                  <div className="w-px h-12 bg-border" />
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">vs. Asking</div>
+                    <div className={`text-lg font-bold ${fin.askingPrice <= fin.suggestedOffer ? "text-emerald-600" : "text-red-600"}`}>
+                      {formatCurrency(fin.askingPrice - fin.suggestedOffer)}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className={`text-sm font-semibold ${offerColor}`}>{fin.offerRecommendation}</div>
+          </div>
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Financials Form (full input — all sections)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BLANK_FIN = (deal: any) => ({
+  askingPrice: deal.askingPrice ?? "",
+  grossRevenue: deal.grossRevenue ?? "",
+  netIncome: deal.netIncome ?? "",
+  sellerClaimedNetIncome: deal.sellerClaimedNetIncome ?? "",
+  adjustedNetIncome: deal.adjustedNetIncome ?? "",
+  targetMultiple: deal.targetMultiple ?? "3.5",
+  // Revenue
+  washFoldRevenue: deal.washFoldRevenue ?? "",
+  pickupDeliveryRevenue: deal.pickupDeliveryRevenue ?? "",
+  commercialRevenue: deal.commercialRevenue ?? "",
+  vendingRevenue: deal.vendingRevenue ?? "",
+  otherRevenue: deal.otherRevenue ?? "",
+  // Expenses
+  payroll: deal.payroll ?? "",
+  monthlyRent: deal.monthlyRent ?? "",
+  water: deal.water ?? "",
+  gas: deal.gas ?? "",
+  electric: deal.electric ?? "",
+  insurance: deal.insurance ?? "",
+  repairsMaintenance: deal.repairsMaintenance ?? "",
+  supplies: deal.supplies ?? "",
+  merchantFees: deal.merchantFees ?? "",
+  softwareFees: deal.softwareFees ?? "",
+  marketing: deal.marketing ?? "",
+  cleaning: deal.cleaning ?? "",
+  accounting: deal.accounting ?? "",
+  licensesPermits: deal.licensesPermits ?? "",
+  otherExpenses: deal.otherExpenses ?? "",
+  // Buyer adjustments
+  adjustedPayroll: deal.adjustedPayroll ?? "",
+  replacementManagerSalary: deal.replacementManagerSalary ?? "",
+  capexReserve: deal.capexReserve ?? "",
+  maintenanceReserve: deal.maintenanceReserve ?? "",
+  otherBuyerAdjustments: deal.otherBuyerAdjustments ?? "",
+  // Financing
+  downPaymentPercent: deal.downPaymentPercent ?? "10",
+  interestRate: deal.interestRate ?? "10",
+  loanTermYears: deal.loanTermYears ?? "10",
+  amortizationYears: deal.amortizationYears ?? "10",
+  closingCostPercent: deal.closingCostPercent ?? "3",
+  sbaFees: deal.sbaFees ?? "",
+  workingCapitalReserve: deal.workingCapitalReserve ?? "",
+  capexBudget: deal.capexBudget ?? "",
+  sellerFinancingAmount: deal.sellerFinancingAmount ?? "",
+  sellerFinancingInterestRate: deal.sellerFinancingInterestRate ?? "",
+  sellerFinancingAmortizationYears: deal.sellerFinancingAmortizationYears ?? "",
+  // Equipment
+  percentMachinesNeedingReplacement: deal.percentMachinesNeedingReplacement ?? "",
+  averageWasherReplacementCost: deal.averageWasherReplacementCost ?? "8000",
+  averageDryerReplacementCost: deal.averageDryerReplacementCost ?? "5000",
+  installationBudget: deal.installationBudget ?? "",
+  capexContingencyPercent: deal.capexContingencyPercent ?? "10",
+  // Upside
+  washFoldRevenueIncrease: deal.washFoldRevenueIncrease ?? "",
+  pickupDeliveryRevenueIncrease: deal.pickupDeliveryRevenueIncrease ?? "",
+  commercialRevenueIncrease: deal.commercialRevenueIncrease ?? "",
+  priceIncreasePercent: deal.priceIncreasePercent ?? "",
+  hoursExpansionRevenueIncrease: deal.hoursExpansionRevenueIncrease ?? "",
+  laborSavings: deal.laborSavings ?? "",
+  utilitySavings: deal.utilitySavings ?? "",
+  otherUpside: deal.otherUpside ?? "",
+});
+
+function numField(v: string) { return v === "" ? null : Number(v); }
+
+function FieldRow({ label, name, value, onChange, type = "number" }: { label: string; name: string; value: string; onChange: (k: string, v: string) => void; type?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5 border-b border-border/40 last:border-0">
+      <label className="text-xs text-muted-foreground shrink-0 w-48">{label}</label>
+      <Input type={type} value={value} className="h-7 text-xs w-36 text-right" onChange={(e) => onChange(name, e.target.value)} />
+    </div>
+  );
+}
+
+function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function FinancialsForm({ deal }: { deal: any }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [fd, setFd] = useState(() => BLANK_FIN(deal));
   const updateDeal = useUpdateDeal();
+  const qc = useQueryClient();
+  const set = (k: string, v: string) => setFd((p) => ({ ...p, [k]: v }));
 
-  const { data: brokers } = useListBrokers({});
+  const handleSave = () => {
+    const payload: Record<string, any> = {};
+    for (const [k, v] of Object.entries(fd)) {
+      payload[k] = v === "" ? null : Number(v);
+    }
+    updateDeal.mutate({ id: deal.id, data: payload }, {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) }); setIsEditing(false); },
+    });
+  };
 
-  if (isLoading || !deal) {
+  const handleEdit = () => { setFd(BLANK_FIN(deal)); setIsEditing(true); };
+
+  if (!isEditing) {
+    const f = calculateDealFinancials({ ...deal });
     return (
-      <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={handleEdit}>Edit Financials</Button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Metric label="Asking Price" value={formatCurrency(f.askingPrice)} />
+          <Metric label="Gross Revenue" value={formatCurrency(f.grossRevenue)} />
+          <Metric label="Seller Claimed Net" value={formatCurrency(f.sellerClaimedNetIncome)} />
+          <Metric label="Adjusted SDE" value={formatCurrency(f.adjustedSDE)} accent="blue" />
+          <Metric label="Monthly Rent" value={formatCurrency(deal.monthlyRent ? Number(deal.monthlyRent) : null)} />
+          <Metric label="Annual Rent" value={formatCurrency(f.annualRent)} />
+          <Metric label="Asking Multiple" value={fmtX(f.askingMultiple)} />
+          <Metric label="Target Multiple" value={fmtX(f.targetMultiple)} />
+          <Metric label="Total Op. Expenses" value={formatCurrency(f.totalOperatingExpenses)} />
+          <Metric label="Net Margin" value={fmtPct(f.netMargin)} />
+          <Metric label="Rent % of Gross" value={fmtPct(f.rentPctGross)} />
+          <Metric label="Max Offer" value={formatCurrency(f.maxOffer)} />
+        </div>
+        <div className="mt-3 text-xs text-muted-foreground border border-border rounded px-3 py-2 bg-muted/20">
+          Click "Edit Financials" to enter detailed revenue breakdown, expenses, buyer adjustments, financing, equipment, and upside data.
+        </div>
       </div>
     );
   }
 
-  const handleStatusChange = (newStatus: string) => {
-    updateDeal.mutate({ id: dealId, data: { status: newStatus } }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) })
-    });
-  };
-
-  const handlePriorityChange = (newPriority: string) => {
-    updateDeal.mutate({ id: dealId, data: { priority: newPriority } }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) })
-    });
-  };
-
   return (
-    <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center gap-4">
-        <Link href="/deals">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{deal.dealName}</h1>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge variant="outline" className="font-normal bg-card">{deal.status}</Badge>
-            <Badge variant="outline" className="font-normal bg-card">{deal.priority} Priority</Badge>
-            {deal.city && <span className="text-sm text-muted-foreground">{deal.city}, {deal.state}</span>}
-          </div>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold">Edit Financial Inputs</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
+          <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="md:col-span-3 space-y-6">
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-card border w-full justify-start h-auto p-1 overflow-x-auto">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="info">Deal Info</TabsTrigger>
-              <TabsTrigger value="financials">Financials</TabsTrigger>
-              <TabsTrigger value="lease">Lease</TabsTrigger>
-              <TabsTrigger value="operations">Operations</TabsTrigger>
-              <TabsTrigger value="redflags">Red Flags</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="reminders">Reminders</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="overview" className="space-y-6 mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Deal Summary</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Asking Price</div>
-                    <div className="font-semibold text-xl">{formatCurrency(deal.askingPrice)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Adj. Net Income</div>
-                    <div className="font-semibold text-xl text-primary">{formatCurrency(deal.adjustedNetIncome)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Asking Multiple</div>
-                    <div className="font-semibold text-xl">{deal.askingMultiple ? `${deal.askingMultiple.toFixed(1)}x` : '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Rent / Gross</div>
-                    <div className="font-semibold text-xl">{formatPercent(deal.rentAsPercentGross)}</div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="grid grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Score & Risk</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-5">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-end">
-                        <span className="text-sm font-medium text-muted-foreground">Deal Score</span>
-                        <div className="text-right">
-                          <span className="text-3xl font-bold">{deal.dealScore || 0}</span>
-                          <span className="text-sm text-muted-foreground ml-1">/ 100</span>
-                        </div>
-                      </div>
-                      <Progress value={deal.dealScore || 0} className="h-2" />
-                      <div className="flex justify-end">
-                        <Badge variant="outline" className={`font-normal ${getQualityColor(deal.dealScore || 0)}`}>
-                          {deal.dealQuality || "Not scored"}
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="pt-4 border-t">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-muted-foreground">Red Flag Level</span>
-                        <Badge variant="outline" className={`font-normal ${getRiskColor(deal.redFlagLevel)}`}>
-                          {deal.redFlagLevel || "Clean"}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Next Action</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {deal.nextAction ? (
-                      <div className="space-y-4">
-                        <div className="text-lg font-medium">{deal.nextAction}</div>
-                        <div className={`text-sm ${isOverdue(deal.nextActionDueDate) ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-                          Due: {formatDateShort(deal.nextActionDueDate)}
-                        </div>
-                        <Button variant="outline" className="w-full">Mark Complete</Button>
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground text-center py-8 bg-muted/30 rounded-lg">
-                        <div className="mb-2">No next action set</div>
-                        <Button variant="secondary" size="sm">Set Action</Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="info" className="mt-6">
-              <DealInfoForm deal={deal} brokers={brokers || []} />
-            </TabsContent>
-
-            <TabsContent value="financials" className="mt-6">
-              <FinancialsForm deal={deal} />
-            </TabsContent>
-
-            <TabsContent value="lease" className="mt-6">
-              <LeaseForm deal={deal} />
-            </TabsContent>
-
-            <TabsContent value="operations" className="mt-6">
-              <OperationsForm deal={deal} />
-            </TabsContent>
-
-            <TabsContent value="redflags" className="mt-6">
-              <RedFlagsTab dealId={dealId} />
-            </TabsContent>
-
-            <TabsContent value="documents" className="mt-6">
-              <DocumentsTab dealId={dealId} />
-            </TabsContent>
-
-            <TabsContent value="notes" className="mt-6">
-              <NotesTab dealId={dealId} />
-            </TabsContent>
-
-            <TabsContent value="reminders" className="mt-6">
-              <RemindersTab dealId={dealId} />
-            </TabsContent>
-
-          </Tabs>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+          <SubSection title="Basic Financials">
+            <FieldRow label="Asking Price" name="askingPrice" value={fd.askingPrice} onChange={set} />
+            <FieldRow label="Gross Revenue" name="grossRevenue" value={fd.grossRevenue} onChange={set} />
+            <FieldRow label="Seller Claimed Net Income" name="sellerClaimedNetIncome" value={fd.sellerClaimedNetIncome} onChange={set} />
+            <FieldRow label="Adjusted SDE (manual override)" name="adjustedNetIncome" value={fd.adjustedNetIncome} onChange={set} />
+            <FieldRow label="Monthly Rent" name="monthlyRent" value={fd.monthlyRent} onChange={set} />
+            <FieldRow label="Target Multiple" name="targetMultiple" value={fd.targetMultiple} onChange={set} />
+          </SubSection>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="py-4 px-5 border-b bg-muted/10">
-              <CardTitle className="text-sm font-semibold">Key Contacts</CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              {deal.brokerId ? (
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Broker</div>
-                  <div className="font-medium">
-                    <Link href={`/brokers/${deal.brokerId}`} className="text-primary hover:underline">{deal.brokerName}</Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-muted-foreground italic">No broker assigned</div>
-              )}
-              {deal.sellerName && (
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Seller</div>
-                  <div className="font-medium">{deal.sellerName}</div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+          <SubSection title="Revenue Detail (annual)">
+            <FieldRow label="Wash & Fold Revenue" name="washFoldRevenue" value={fd.washFoldRevenue} onChange={set} />
+            <FieldRow label="Pickup & Delivery Revenue" name="pickupDeliveryRevenue" value={fd.pickupDeliveryRevenue} onChange={set} />
+            <FieldRow label="Commercial Revenue" name="commercialRevenue" value={fd.commercialRevenue} onChange={set} />
+            <FieldRow label="Vending Revenue" name="vendingRevenue" value={fd.vendingRevenue} onChange={set} />
+            <FieldRow label="Other Revenue" name="otherRevenue" value={fd.otherRevenue} onChange={set} />
+          </SubSection>
+        </div>
 
-          <Card>
-            <CardHeader className="py-4 px-5 border-b bg-muted/10">
-              <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Status</label>
-                <Select value={deal.status || ""} onValueChange={handleStatusChange}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select status" /></SelectTrigger>
-                  <SelectContent>
-                    {ALL_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Priority</label>
-                <Select value={deal.priority || ""} onValueChange={handlePriorityChange}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Select priority" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Low">Low</SelectItem>
-                    <SelectItem value="Medium">Medium</SelectItem>
-                    <SelectItem value="High">High</SelectItem>
-                    <SelectItem value="Hot">Hot</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+          <SubSection title="Expense Detail (annual)">
+            <FieldRow label="Payroll" name="payroll" value={fd.payroll} onChange={set} />
+            <FieldRow label="Water" name="water" value={fd.water} onChange={set} />
+            <FieldRow label="Gas" name="gas" value={fd.gas} onChange={set} />
+            <FieldRow label="Electric" name="electric" value={fd.electric} onChange={set} />
+            <FieldRow label="Insurance" name="insurance" value={fd.insurance} onChange={set} />
+            <FieldRow label="Repairs & Maintenance" name="repairsMaintenance" value={fd.repairsMaintenance} onChange={set} />
+            <FieldRow label="Supplies" name="supplies" value={fd.supplies} onChange={set} />
+            <FieldRow label="Merchant Fees" name="merchantFees" value={fd.merchantFees} onChange={set} />
+            <FieldRow label="Software Fees" name="softwareFees" value={fd.softwareFees} onChange={set} />
+            <FieldRow label="Marketing" name="marketing" value={fd.marketing} onChange={set} />
+            <FieldRow label="Cleaning" name="cleaning" value={fd.cleaning} onChange={set} />
+            <FieldRow label="Accounting" name="accounting" value={fd.accounting} onChange={set} />
+            <FieldRow label="Licenses & Permits" name="licensesPermits" value={fd.licensesPermits} onChange={set} />
+            <FieldRow label="Other Expenses" name="otherExpenses" value={fd.otherExpenses} onChange={set} />
+          </SubSection>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+          <SubSection title="Buyer Adjustments">
+            <FieldRow label="Adjusted Payroll" name="adjustedPayroll" value={fd.adjustedPayroll} onChange={set} />
+            <FieldRow label="Replacement Manager Salary" name="replacementManagerSalary" value={fd.replacementManagerSalary} onChange={set} />
+            <FieldRow label="Capex Reserve (annual)" name="capexReserve" value={fd.capexReserve} onChange={set} />
+            <FieldRow label="Maintenance Reserve (annual)" name="maintenanceReserve" value={fd.maintenanceReserve} onChange={set} />
+            <FieldRow label="Other Buyer Adjustments" name="otherBuyerAdjustments" value={fd.otherBuyerAdjustments} onChange={set} />
+          </SubSection>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 space-y-1">
+          <SubSection title="Financing">
+            <FieldRow label="Down Payment %" name="downPaymentPercent" value={fd.downPaymentPercent} onChange={set} />
+            <FieldRow label="Interest Rate %" name="interestRate" value={fd.interestRate} onChange={set} />
+            <FieldRow label="Loan Term (years)" name="loanTermYears" value={fd.loanTermYears} onChange={set} />
+            <FieldRow label="Amortization (years)" name="amortizationYears" value={fd.amortizationYears} onChange={set} />
+            <FieldRow label="Closing Cost %" name="closingCostPercent" value={fd.closingCostPercent} onChange={set} />
+            <FieldRow label="SBA Fees" name="sbaFees" value={fd.sbaFees} onChange={set} />
+            <FieldRow label="Working Capital Reserve" name="workingCapitalReserve" value={fd.workingCapitalReserve} onChange={set} />
+            <FieldRow label="Capex Budget" name="capexBudget" value={fd.capexBudget} onChange={set} />
+            <FieldRow label="Seller Financing Amount" name="sellerFinancingAmount" value={fd.sellerFinancingAmount} onChange={set} />
+            <FieldRow label="Seller Fin. Interest Rate %" name="sellerFinancingInterestRate" value={fd.sellerFinancingInterestRate} onChange={set} />
+            <FieldRow label="Seller Fin. Amortization (yrs)" name="sellerFinancingAmortizationYears" value={fd.sellerFinancingAmortizationYears} onChange={set} />
+          </SubSection>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+          <SubSection title="Equipment Capex">
+            <FieldRow label="% Machines Needing Replacement" name="percentMachinesNeedingReplacement" value={fd.percentMachinesNeedingReplacement} onChange={set} />
+            <FieldRow label="Avg. Washer Replacement Cost" name="averageWasherReplacementCost" value={fd.averageWasherReplacementCost} onChange={set} />
+            <FieldRow label="Avg. Dryer Replacement Cost" name="averageDryerReplacementCost" value={fd.averageDryerReplacementCost} onChange={set} />
+            <FieldRow label="Installation Budget" name="installationBudget" value={fd.installationBudget} onChange={set} />
+            <FieldRow label="Capex Contingency %" name="capexContingencyPercent" value={fd.capexContingencyPercent} onChange={set} />
+          </SubSection>
+
+          <SubSection title="Upside Model (annual)">
+            <FieldRow label="Wash & Fold Revenue Increase" name="washFoldRevenueIncrease" value={fd.washFoldRevenueIncrease} onChange={set} />
+            <FieldRow label="Pickup Delivery Increase" name="pickupDeliveryRevenueIncrease" value={fd.pickupDeliveryRevenueIncrease} onChange={set} />
+            <FieldRow label="Commercial Revenue Increase" name="commercialRevenueIncrease" value={fd.commercialRevenueIncrease} onChange={set} />
+            <FieldRow label="Price Increase %" name="priceIncreasePercent" value={fd.priceIncreasePercent} onChange={set} />
+            <FieldRow label="Hours Expansion Revenue" name="hoursExpansionRevenueIncrease" value={fd.hoursExpansionRevenueIncrease} onChange={set} />
+            <FieldRow label="Labor Savings" name="laborSavings" value={fd.laborSavings} onChange={set} />
+            <FieldRow label="Utility Savings" name="utilitySavings" value={fd.utilitySavings} onChange={set} />
+            <FieldRow label="Other Upside" name="otherUpside" value={fd.otherUpside} onChange={set} />
+          </SubSection>
         </div>
       </div>
     </div>
   );
 }
 
-// Sub-components for tabs
+// ─────────────────────────────────────────────────────────────────────────────
+// Other sub-tabs (preserved from original)
+// ─────────────────────────────────────────────────────────────────────────────
 
-function DealInfoForm({ deal, brokers }: { deal: any, brokers: any[] }) {
+function DealInfoForm({ deal, brokers }: { deal: any; brokers: any[] }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    dealName: deal.dealName || "",
-    businessName: deal.businessName || "",
-    address: deal.address || "",
-    city: deal.city || "",
-    state: deal.state || "",
-    assetType: deal.assetType || "",
-    source: deal.source || "",
-    sellerName: deal.sellerName || "",
-    brokerId: deal.brokerId || null,
-    lastContactedDate: deal.lastContactedDate || ""
+  const [fd, setFd] = useState({
+    dealName: deal.dealName || "", businessName: deal.businessName || "",
+    address: deal.address || "", city: deal.city || "", state: deal.state || "",
+    assetType: deal.assetType || "", source: deal.source || "",
+    sellerName: deal.sellerName || "", brokerId: deal.brokerId || null,
+    lastContactedDate: deal.lastContactedDate || "", nextAction: deal.nextAction || "",
+    nextActionDueDate: deal.nextActionDueDate || "",
   });
   const updateDeal = useUpdateDeal();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
+  const set = (k: string, v: any) => setFd((p) => ({ ...p, [k]: v }));
 
   const handleSave = () => {
-    updateDeal.mutate({ id: deal.id, data: formData }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) });
-        setIsEditing(false);
-      }
+    updateDeal.mutate({ id: deal.id, data: fd }, {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) }); setIsEditing(false); },
     });
   };
 
+  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div>
+      <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">{label}</div>
+      <div className="text-sm font-medium">{value || "—"}</div>
+    </div>
+  );
+
   if (!isEditing) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-lg">Deal Information</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-12 gap-y-6 pt-6">
-          <div><div className="text-sm text-muted-foreground mb-1">Deal Name</div><div className="font-medium">{deal.dealName}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Business Name</div><div className="font-medium">{deal.businessName || "-"}</div></div>
-          <div className="col-span-2"><div className="text-sm text-muted-foreground mb-1">Address</div><div className="font-medium">{[deal.address, deal.city, deal.state].filter(Boolean).join(", ") || "-"}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Asset Type</div><div className="font-medium">{deal.assetType || "-"}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Source</div><div className="font-medium">{deal.source || "-"}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Seller Name</div><div className="font-medium">{deal.sellerName || "-"}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Last Contacted</div><div className="font-medium">{formatDateShort(deal.lastContactedDate)}</div></div>
-        </CardContent>
-      </Card>
+      <SectionCard title="Deal Information">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-4">
+          <Row label="Deal Name" value={deal.dealName} />
+          <Row label="Business Name" value={deal.businessName} />
+          <Row label="Address" value={[deal.address, deal.city, deal.state].filter(Boolean).join(", ")} />
+          <Row label="Asset Type" value={deal.assetType} />
+          <Row label="Source" value={deal.source} />
+          <Row label="Seller" value={deal.sellerName} />
+          <Row label="Broker" value={deal.brokerName ? <Link href={`/brokers/${deal.brokerId}`}><span className="text-primary hover:underline">{deal.brokerName}</span></Link> : "—"} />
+          <Row label="Last Contacted" value={formatDateShort(deal.lastContactedDate)} />
+          <Row label="Next Action" value={deal.nextAction} />
+          <Row label="Next Action Due" value={formatDateShort(deal.nextActionDueDate)} />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
+      </SectionCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b">
-        <CardTitle className="text-lg">Edit Deal Information</CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
-        </div>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-x-8 gap-y-4 pt-6">
-        <div className="space-y-2"><label className="text-sm font-medium">Deal Name</label><Input value={formData.dealName} onChange={e => setFormData({...formData, dealName: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Business Name</label><Input value={formData.businessName} onChange={e => setFormData({...formData, businessName: e.target.value})} /></div>
-        <div className="space-y-2 col-span-2"><label className="text-sm font-medium">Address</label><Input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">City</label><Input value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">State</label><Input value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Asset Type</label><Input value={formData.assetType} onChange={e => setFormData({...formData, assetType: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Source</label><Input value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Seller Name</label><Input value={formData.sellerName} onChange={e => setFormData({...formData, sellerName: e.target.value})} /></div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Linked Broker</label>
-          <Select value={formData.brokerId?.toString() || "none"} onValueChange={v => setFormData({...formData, brokerId: v === "none" ? null : parseInt(v)})}>
-            <SelectTrigger><SelectValue placeholder="Select broker" /></SelectTrigger>
+    <SectionCard title="Edit Deal Information">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {[
+          ["Deal Name", "dealName"], ["Business Name", "businessName"],
+          ["Address", "address"], ["City", "city"], ["State", "state"],
+          ["Asset Type", "assetType"], ["Source", "source"], ["Seller Name", "sellerName"],
+        ].map(([label, key]) => (
+          <div key={key} className="space-y-1">
+            <label className="text-xs font-medium">{label}</label>
+            <Input value={(fd as any)[key]} onChange={(e) => set(key, e.target.value)} className="h-8 text-sm" />
+          </div>
+        ))}
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Broker</label>
+          <Select value={fd.brokerId?.toString() || "none"} onValueChange={(v) => set("brokerId", v === "none" ? null : parseInt(v))}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
-              {brokers.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+              {brokers.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function FinancialsForm({ deal }: { deal: any }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    askingPrice: deal.askingPrice || "",
-    grossRevenue: deal.grossRevenue || "",
-    netIncome: deal.netIncome || "",
-    adjustedNetIncome: deal.adjustedNetIncome || "",
-    monthlyRent: deal.monthlyRent || "",
-    squareFootage: deal.squareFootage || ""
-  });
-  const updateDeal = useUpdateDeal();
-  const queryClient = useQueryClient();
-
-  const handleSave = () => {
-    const payload = {
-      askingPrice: formData.askingPrice ? Number(formData.askingPrice) : null,
-      grossRevenue: formData.grossRevenue ? Number(formData.grossRevenue) : null,
-      netIncome: formData.netIncome ? Number(formData.netIncome) : null,
-      adjustedNetIncome: formData.adjustedNetIncome ? Number(formData.adjustedNetIncome) : null,
-      monthlyRent: formData.monthlyRent ? Number(formData.monthlyRent) : null,
-      squareFootage: formData.squareFootage ? Number(formData.squareFootage) : null,
-    };
-    updateDeal.mutate({ id: deal.id, data: payload }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) });
-        setIsEditing(false);
-      }
-    });
-  };
-
-  if (!isEditing) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-lg">Financial Details</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-12 gap-y-6 pt-6">
-          <div><div className="text-sm text-muted-foreground mb-1">Asking Price</div><div className="font-medium text-lg">{formatCurrency(deal.askingPrice)}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Asking Multiple</div><div className="font-medium text-lg">{deal.askingMultiple ? `${deal.askingMultiple.toFixed(2)}x` : "-"}</div></div>
-          
-          <div className="col-span-2 border-t pt-4 grid grid-cols-2 gap-x-12 gap-y-6">
-            <div><div className="text-sm text-muted-foreground mb-1">Gross Revenue</div><div className="font-medium">{formatCurrency(deal.grossRevenue)}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Net Income</div><div className="font-medium">{formatCurrency(deal.netIncome)}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Adjusted Net Income</div><div className="font-medium text-primary">{formatCurrency(deal.adjustedNetIncome)}</div></div>
-          </div>
-          
-          <div className="col-span-2 border-t pt-4 grid grid-cols-2 gap-x-12 gap-y-6">
-            <div><div className="text-sm text-muted-foreground mb-1">Monthly Rent</div><div className="font-medium">{formatCurrency(deal.monthlyRent)}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Annual Rent</div><div className="font-medium">{formatCurrency(deal.annualRent)}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Rent as % of Gross</div><div className="font-medium">{formatPercent(deal.rentAsPercentGross)}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Square Footage</div><div className="font-medium">{deal.squareFootage ? `${deal.squareFootage.toLocaleString()} sq ft` : "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Rent per Sq Ft</div><div className="font-medium">{formatCurrency(deal.rentPerSqFt)}</div></div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b">
-        <CardTitle className="text-lg">Edit Financial Details</CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Last Contacted</label>
+          <Input type="date" value={fd.lastContactedDate} onChange={(e) => set("lastContactedDate", e.target.value)} className="h-8 text-sm" />
         </div>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-x-8 gap-y-4 pt-6">
-        <div className="space-y-2"><label className="text-sm font-medium">Asking Price</label><Input type="number" value={formData.askingPrice} onChange={e => setFormData({...formData, askingPrice: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Gross Revenue</label><Input type="number" value={formData.grossRevenue} onChange={e => setFormData({...formData, grossRevenue: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Net Income</label><Input type="number" value={formData.netIncome} onChange={e => setFormData({...formData, netIncome: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Adjusted Net Income</label><Input type="number" value={formData.adjustedNetIncome} onChange={e => setFormData({...formData, adjustedNetIncome: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Monthly Rent</label><Input type="number" value={formData.monthlyRent} onChange={e => setFormData({...formData, monthlyRent: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Square Footage</label><Input type="number" value={formData.squareFootage} onChange={e => setFormData({...formData, squareFootage: e.target.value})} /></div>
-      </CardContent>
-    </Card>
+        <div className="space-y-1 col-span-2">
+          <label className="text-xs font-medium">Next Action</label>
+          <Input value={fd.nextAction} onChange={(e) => set("nextAction", e.target.value)} className="h-8 text-sm" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">Next Action Due</label>
+          <Input type="date" value={fd.nextActionDueDate} onChange={(e) => set("nextActionDueDate", e.target.value)} className="h-8 text-sm" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
+        <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+      </div>
+    </SectionCard>
   );
 }
 
 function LeaseForm({ deal }: { deal: any }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    leaseYearsRemaining: deal.leaseYearsRemaining || "",
-    renewalOptions: deal.renewalOptions || "",
-  });
+  const [fd, setFd] = useState({ leaseYearsRemaining: deal.leaseYearsRemaining || "", renewalOptions: deal.renewalOptions || "", realEstateIncluded: deal.realEstateIncluded || false });
   const updateDeal = useUpdateDeal();
-  const queryClient = useQueryClient();
-
-  const handleSave = () => {
-    updateDeal.mutate({ 
-      id: deal.id, 
-      data: { 
-        leaseYearsRemaining: formData.leaseYearsRemaining ? Number(formData.leaseYearsRemaining) : null,
-        renewalOptions: formData.renewalOptions
-      } 
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) });
-        setIsEditing(false);
-      }
-    });
-  };
+  const qc = useQueryClient();
 
   if (!isEditing) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-lg">Lease Details</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-x-12 gap-y-6 pt-6">
-          <div><div className="text-sm text-muted-foreground mb-1">Lease Years Remaining</div><div className="font-medium">{deal.leaseYearsRemaining || "-"}</div></div>
-          <div><div className="text-sm text-muted-foreground mb-1">Renewal Options</div><div className="font-medium">{deal.renewalOptions || "-"}</div></div>
-        </CardContent>
-      </Card>
+      <SectionCard title="Lease Details">
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <Metric label="Lease Years Remaining" value={deal.leaseYearsRemaining ? `${deal.leaseYearsRemaining} yrs` : "—"} accent={deal.leaseYearsRemaining < 5 ? "red" : deal.leaseYearsRemaining >= 10 ? "green" : undefined} />
+          <Metric label="Renewal Options" value={deal.renewalOptions || "—"} />
+          <Metric label="Real Estate Included" value={deal.realEstateIncluded ? "Yes" : "No"} />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
+      </SectionCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b">
-        <CardTitle className="text-lg">Edit Lease Details</CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+    <SectionCard title="Edit Lease Details">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="space-y-1"><label className="text-xs font-medium">Lease Years Remaining</label>
+          <Input type="number" value={fd.leaseYearsRemaining} onChange={(e) => setFd({ ...fd, leaseYearsRemaining: e.target.value })} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Renewal Options</label>
+          <Input value={fd.renewalOptions} onChange={(e) => setFd({ ...fd, renewalOptions: e.target.value })} className="h-8 text-sm" /></div>
+        <div className="flex items-center gap-2 pt-2">
+          <Checkbox checked={fd.realEstateIncluded} onCheckedChange={(c) => setFd({ ...fd, realEstateIncluded: c as boolean })} id="re" />
+          <label htmlFor="re" className="text-xs font-medium">Real Estate Included</label>
         </div>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-x-8 gap-y-4 pt-6">
-        <div className="space-y-2"><label className="text-sm font-medium">Lease Years Remaining</label><Input type="number" value={formData.leaseYearsRemaining} onChange={e => setFormData({...formData, leaseYearsRemaining: e.target.value})} /></div>
-        <div className="space-y-2"><label className="text-sm font-medium">Renewal Options</label><Input value={formData.renewalOptions} onChange={e => setFormData({...formData, renewalOptions: e.target.value})} /></div>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
+        <Button size="sm" onClick={() => {
+          updateDeal.mutate({ id: deal.id, data: { leaseYearsRemaining: fd.leaseYearsRemaining ? Number(fd.leaseYearsRemaining) : null, renewalOptions: fd.renewalOptions, realEstateIncluded: fd.realEstateIncluded } }, {
+            onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) }); setIsEditing(false); }
+          });
+        }} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+      </div>
+    </SectionCard>
   );
 }
 
 function OperationsForm({ deal }: { deal: any }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    numWashers: deal.numWashers || "",
-    numDryers: deal.numDryers || "",
-    machineBrand: deal.machineBrand || "",
-    avgMachineAge: deal.avgMachineAge || "",
-    cardOrCoin: deal.cardOrCoin || "Both",
-    hoursOfOperation: deal.hoursOfOperation || "",
-    staffCount: deal.staffCount || "",
-    ownerOperated: deal.ownerOperated || false,
-    washAndFold: deal.washAndFold || false,
-    pickupDelivery: deal.pickupDelivery || false,
-    commercialAccounts: deal.commercialAccounts || false
+  const [fd, setFd] = useState({
+    numWashers: deal.numWashers ?? "", numDryers: deal.numDryers ?? "",
+    machineBrand: deal.machineBrand || "", avgMachineAge: deal.avgMachineAge ?? "",
+    cardOrCoin: deal.cardOrCoin || "Both", hoursOfOperation: deal.hoursOfOperation || "",
+    staffCount: deal.staffCount ?? "", ownerOperated: deal.ownerOperated ?? true,
+    washAndFold: deal.washAndFold ?? false, pickupDelivery: deal.pickupDelivery ?? false,
+    commercialAccounts: deal.commercialAccounts ?? false, squareFootage: deal.squareFootage ?? "",
   });
   const updateDeal = useUpdateDeal();
-  const queryClient = useQueryClient();
-
-  const handleSave = () => {
-    updateDeal.mutate({ 
-      id: deal.id, 
-      data: { 
-        ...formData,
-        numWashers: formData.numWashers ? Number(formData.numWashers) : null,
-        numDryers: formData.numDryers ? Number(formData.numDryers) : null,
-        avgMachineAge: formData.avgMachineAge ? Number(formData.avgMachineAge) : null,
-        staffCount: formData.staffCount ? Number(formData.staffCount) : null,
-      } 
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) });
-        setIsEditing(false);
-      }
-    });
-  };
+  const qc = useQueryClient();
+  const set = (k: string, v: any) => setFd((p) => ({ ...p, [k]: v }));
 
   if (!isEditing) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-lg">Operations & Equipment</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
-        </CardHeader>
-        <CardContent className="pt-6 space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div><div className="text-sm text-muted-foreground mb-1">Washers</div><div className="font-medium">{deal.numWashers || "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Dryers</div><div className="font-medium">{deal.numDryers || "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Brands</div><div className="font-medium">{deal.machineBrand || "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Avg Age</div><div className="font-medium">{deal.avgMachineAge ? `${deal.avgMachineAge} yrs` : "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">System</div><div className="font-medium">{deal.cardOrCoin || "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Hours</div><div className="font-medium">{deal.hoursOfOperation || "-"}</div></div>
-            <div><div className="text-sm text-muted-foreground mb-1">Staff</div><div className="font-medium">{deal.staffCount || "0"}</div></div>
-          </div>
-          
-          <div className="border-t pt-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="flex items-center gap-2">
-              {deal.ownerOperated ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <CircleDashed className="w-5 h-5 text-muted-foreground" />}
-              <span className="font-medium">Owner Operated</span>
+      <SectionCard title="Operations & Equipment">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5 mb-4">
+          <Metric label="Washers" value={deal.numWashers ?? "—"} />
+          <Metric label="Dryers" value={deal.numDryers ?? "—"} />
+          <Metric label="Brands" value={deal.machineBrand || "—"} />
+          <Metric label="Avg Machine Age" value={deal.avgMachineAge ? `${deal.avgMachineAge} yrs` : "—"} accent={deal.avgMachineAge > 12 ? "red" : deal.avgMachineAge <= 7 ? "green" : undefined} />
+          <Metric label="System" value={deal.cardOrCoin || "—"} />
+          <Metric label="Hours" value={deal.hoursOfOperation || "—"} />
+          <Metric label="Staff" value={deal.staffCount ?? "0"} />
+          <Metric label="Square Footage" value={deal.squareFootage ? `${Number(deal.squareFootage).toLocaleString()} sqft` : "—"} />
+        </div>
+        <div className="flex flex-wrap gap-3 mb-4">
+          {[
+            { flag: deal.ownerOperated, label: "Owner Operated" },
+            { flag: deal.washAndFold, label: "Wash & Fold" },
+            { flag: deal.pickupDelivery, label: "Pickup/Delivery" },
+            { flag: deal.commercialAccounts, label: "Commercial Accounts" },
+          ].map(({ flag, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              {flag ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
+              <span className="text-sm font-medium">{label}</span>
             </div>
-            <div className="flex items-center gap-2">
-              {deal.washAndFold ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <CircleDashed className="w-5 h-5 text-muted-foreground" />}
-              <span className="font-medium">Wash & Fold</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {deal.pickupDelivery ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <CircleDashed className="w-5 h-5 text-muted-foreground" />}
-              <span className="font-medium">Pickup/Delivery</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {deal.commercialAccounts ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <CircleDashed className="w-5 h-5 text-muted-foreground" />}
-              <span className="font-medium">Commercial Accounts</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
+      </SectionCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b">
-        <CardTitle className="text-lg">Edit Operations</CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
-          <Button size="sm" onClick={handleSave} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+    <SectionCard title="Edit Operations">
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="space-y-1"><label className="text-xs font-medium">Washers</label><Input type="number" value={fd.numWashers} onChange={(e) => set("numWashers", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Dryers</label><Input type="number" value={fd.numDryers} onChange={(e) => set("numDryers", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Machine Brand</label><Input value={fd.machineBrand} onChange={(e) => set("machineBrand", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Avg Machine Age (yrs)</label><Input type="number" value={fd.avgMachineAge} onChange={(e) => set("avgMachineAge", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Square Footage</label><Input type="number" value={fd.squareFootage} onChange={(e) => set("squareFootage", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Card or Coin</label>
+          <Select value={fd.cardOrCoin} onValueChange={(v) => set("cardOrCoin", v)}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="Coin">Coin</SelectItem><SelectItem value="Card">Card</SelectItem><SelectItem value="Both">Both</SelectItem></SelectContent>
+          </Select>
         </div>
-      </CardHeader>
-      <CardContent className="pt-6 space-y-6">
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-          <div className="space-y-2"><label className="text-sm font-medium">Washers</label><Input type="number" value={formData.numWashers} onChange={e => setFormData({...formData, numWashers: e.target.value})} /></div>
-          <div className="space-y-2"><label className="text-sm font-medium">Dryers</label><Input type="number" value={formData.numDryers} onChange={e => setFormData({...formData, numDryers: e.target.value})} /></div>
-          <div className="space-y-2"><label className="text-sm font-medium">Machine Brands</label><Input value={formData.machineBrand} onChange={e => setFormData({...formData, machineBrand: e.target.value})} /></div>
-          <div className="space-y-2"><label className="text-sm font-medium">Avg Machine Age</label><Input type="number" value={formData.avgMachineAge} onChange={e => setFormData({...formData, avgMachineAge: e.target.value})} /></div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Card or Coin</label>
-            <Select value={formData.cardOrCoin} onValueChange={v => setFormData({...formData, cardOrCoin: v})}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Coin">Coin</SelectItem>
-                <SelectItem value="Card">Card</SelectItem>
-                <SelectItem value="Both">Both</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-1"><label className="text-xs font-medium">Hours of Operation</label><Input value={fd.hoursOfOperation} onChange={(e) => set("hoursOfOperation", e.target.value)} className="h-8 text-sm" /></div>
+        <div className="space-y-1"><label className="text-xs font-medium">Staff Count</label><Input type="number" value={fd.staffCount} onChange={(e) => set("staffCount", e.target.value)} className="h-8 text-sm" /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        {[["ownerOperated","Owner Operated"],["washAndFold","Wash & Fold"],["pickupDelivery","Pickup/Delivery"],["commercialAccounts","Commercial Accounts"]].map(([k,l]) => (
+          <div key={k} className="flex items-center gap-2">
+            <Checkbox checked={(fd as any)[k]} onCheckedChange={(c) => set(k, c as boolean)} id={`op-${k}`} />
+            <label htmlFor={`op-${k}`} className="text-xs font-medium">{l}</label>
           </div>
-          <div className="space-y-2"><label className="text-sm font-medium">Hours of Operation</label><Input value={formData.hoursOfOperation} onChange={e => setFormData({...formData, hoursOfOperation: e.target.value})} /></div>
-          <div className="space-y-2"><label className="text-sm font-medium">Staff Count</label><Input type="number" value={formData.staffCount} onChange={e => setFormData({...formData, staffCount: e.target.value})} /></div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 border-t pt-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox id="owner" checked={formData.ownerOperated} onCheckedChange={(c) => setFormData({...formData, ownerOperated: c as boolean})} />
-            <label htmlFor="owner" className="text-sm font-medium leading-none">Owner Operated</label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox id="wf" checked={formData.washAndFold} onCheckedChange={(c) => setFormData({...formData, washAndFold: c as boolean})} />
-            <label htmlFor="wf" className="text-sm font-medium leading-none">Wash & Fold</label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox id="pd" checked={formData.pickupDelivery} onCheckedChange={(c) => setFormData({...formData, pickupDelivery: c as boolean})} />
-            <label htmlFor="pd" className="text-sm font-medium leading-none">Pickup/Delivery</label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox id="comm" checked={formData.commercialAccounts} onCheckedChange={(c) => setFormData({...formData, commercialAccounts: c as boolean})} />
-            <label htmlFor="comm" className="text-sm font-medium leading-none">Commercial Accounts</label>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>Cancel</Button>
+        <Button size="sm" onClick={() => {
+          updateDeal.mutate({ id: deal.id, data: { ...fd, numWashers: fd.numWashers ? Number(fd.numWashers) : null, numDryers: fd.numDryers ? Number(fd.numDryers) : null, avgMachineAge: fd.avgMachineAge ? Number(fd.avgMachineAge) : null, staffCount: fd.staffCount ? Number(fd.staffCount) : null, squareFootage: fd.squareFootage ? Number(fd.squareFootage) : null } }, {
+            onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealQueryKey(deal.id) }); setIsEditing(false); }
+          });
+        }} disabled={updateDeal.isPending}>{updateDeal.isPending ? "Saving..." : "Save"}</Button>
+      </div>
+    </SectionCard>
   );
 }
 
 function RedFlagsTab({ dealId }: { dealId: number }) {
   const { data: flags, isLoading } = useGetDealRedFlags(dealId, { query: { enabled: !!dealId, queryKey: getGetDealRedFlagsQueryKey(dealId) } });
   const updateFlags = useUpdateDealRedFlags();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading red flags...</div>;
+  const RED_FLAG_LIST = [
+    "Revenue mismatch with utilities","Unverifiable cash income","Declining revenue trend","High labor costs",
+    "Missing tax returns","Equipment age > 10 years","Missing maintenance records","Environmental liability / PERC",
+    "Short lease remaining","No renewal options","Demolition clause in lease","Rent > 25% of gross",
+    "Major new competition nearby","Declining neighborhood","Poor parking or access","Bad online reviews",
+    "Seller uncooperative","Suspicious broker behavior","Unpaid taxes or liens","Zoning issues","High crime area",
+  ];
+
+  if (isLoading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>;
+
+  const activeCount = flags?.filter((f) => f.isFlagged).length || 0;
+  const riskCls = activeCount >= 9 ? "bg-red-50 text-red-700 border-red-200" : activeCount >= 6 ? "bg-orange-50 text-orange-700 border-orange-200" : activeCount >= 3 ? "bg-yellow-50 text-yellow-700 border-yellow-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
   const handleFlagChange = (flagKey: string, isChecked: boolean) => {
     if (!flags) return;
-    const currentFlags = flags.map(f => ({ flagKey: f.flagKey, isFlagged: f.isFlagged, notes: f.notes }));
-    const existing = currentFlags.find(f => f.flagKey === flagKey);
-    if (existing) {
-      existing.isFlagged = isChecked;
-    } else {
-      currentFlags.push({ flagKey, isFlagged: isChecked, notes: "" });
-    }
-    
-    updateFlags.mutate({ id: dealId, data: { flags: currentFlags } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetDealRedFlagsQueryKey(dealId) });
-        queryClient.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) });
-      }
+    const cur = flags.map((f) => ({ flagKey: f.flagKey, isFlagged: f.isFlagged, notes: f.notes }));
+    const ex = cur.find((f) => f.flagKey === flagKey);
+    if (ex) ex.isFlagged = isChecked;
+    else cur.push({ flagKey, isFlagged: isChecked, notes: "" });
+    updateFlags.mutate({ id: dealId, data: { flags: cur } }, {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getGetDealRedFlagsQueryKey(dealId) }); qc.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) }); },
     });
   };
 
-  const activeCount = flags?.filter(f => f.isFlagged).length || 0;
-  
-  // This is a static list of the 21 red flags
-  const RED_FLAG_LIST = [
-    "Revenue mismatch with utilities", "Unverifiable cash income", "Declining revenue trend", "High labor costs",
-    "Missing tax returns", "Equipment age > 10 years", "Missing maintenance records", "Environmental liability / PERC",
-    "Short lease remaining", "No renewal options", "Demolition clause in lease", "Rent > 25% of gross",
-    "Major new competition nearby", "Declining neighborhood", "Poor parking or access", "Bad online reviews",
-    "Seller uncooperative", "Suspicious broker behavior", "Unpaid taxes or liens", "Zoning issues", "High crime area"
-  ];
-
   return (
-    <Card>
-      <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Red Flags Assessment</CardTitle>
-          <Badge variant="outline" className={`font-normal ${
-            activeCount >= 9 ? "bg-red-50 text-red-700 border-red-200" :
-            activeCount >= 6 ? "bg-orange-50 text-orange-700 border-orange-200" :
-            activeCount >= 3 ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
-            "bg-green-50 text-green-700 border-green-200"
-          }`}>
-            {activeCount} / 21 Flags Found
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {RED_FLAG_LIST.map(flag => {
-            const isFlagged = flags?.find(f => f.flagKey === flag)?.isFlagged || false;
-            return (
-              <div key={flag} className="flex items-start space-x-3 p-2 rounded hover:bg-muted/30 transition-colors">
-                <Checkbox 
-                  id={`flag-${flag}`} 
-                  checked={isFlagged}
-                  onCheckedChange={(c) => handleFlagChange(flag, c as boolean)}
-                />
-                <label htmlFor={`flag-${flag}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 pt-0.5">
-                  {flag}
-                </label>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+    <SectionCard title={`Red Flags Assessment — ${activeCount} / ${RED_FLAG_LIST.length} Flagged`}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border ${riskCls}`}>
+          {activeCount >= 9 ? "Dangerous" : activeCount >= 6 ? "High Risk" : activeCount >= 3 ? "Caution" : "Clean"}
+        </span>
+        <Progress value={(activeCount / RED_FLAG_LIST.length) * 100} className="h-1.5 flex-1" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
+        {RED_FLAG_LIST.map((flag) => {
+          const isFlagged = flags?.find((f) => f.flagKey === flag)?.isFlagged || false;
+          return (
+            <div key={flag} className={`flex items-start gap-2.5 p-2 rounded transition-colors ${isFlagged ? "bg-red-50" : "hover:bg-muted/30"}`}>
+              <Checkbox id={`flag-${flag}`} checked={isFlagged} onCheckedChange={(c) => handleFlagChange(flag, c as boolean)} />
+              <label htmlFor={`flag-${flag}`} className={`text-xs font-medium leading-tight pt-0.5 cursor-pointer ${isFlagged ? "text-red-700" : "text-foreground"}`}>{flag}</label>
+            </div>
+          );
+        })}
+      </div>
+    </SectionCard>
   );
 }
 
 function DocumentsTab({ dealId }: { dealId: number }) {
   const { data: documents, isLoading } = useListDocuments({ dealId }, { query: { enabled: !!dealId, queryKey: getListDocumentsQueryKey({ dealId }) } });
   const updateDoc = useUpdateDocument();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading documents...</div>;
+  if (isLoading) return <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>;
 
-  const handleStatusChange = (id: number, newStatus: string) => {
-    updateDoc.mutate({ id, data: { status: newStatus } }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey({ dealId }) })
-    });
-  };
+  const received = documents?.filter((d) => ["Received","Reviewed"].includes(d.status)).length || 0;
+  const total = documents?.length || 0;
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case "Problem found": return "text-red-600 bg-red-50";
-      case "Reviewed": return "text-green-600 bg-green-50";
-      case "Received": return "text-blue-600 bg-blue-50";
-      case "Requested": return "text-yellow-600 bg-yellow-50";
-      default: return "text-gray-600 bg-gray-50";
-    }
-  };
-
-  const receivedOrReviewed = documents?.filter(d => ["Received", "Reviewed"].includes(d.status)).length || 0;
-  const totalDocs = documents?.length || 0;
-  const progress = totalDocs > 0 ? (receivedOrReviewed / totalDocs) * 100 : 0;
+  const statusCls = (s: string) =>
+    s === "Problem found" ? "text-red-600" : s === "Reviewed" ? "text-emerald-600" : s === "Received" ? "text-blue-600" : s === "Requested" ? "text-amber-600" : "text-muted-foreground";
 
   return (
-    <Card>
-      <CardHeader className="border-b space-y-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Due Diligence Documents</CardTitle>
-          <span className="text-sm font-medium text-muted-foreground">{receivedOrReviewed} / {totalDocs} Received</span>
-        </div>
-        <Progress value={progress} className="h-2" />
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="divide-y">
-          {documents?.map(doc => (
-            <div key={doc.id} className="flex items-center justify-between p-4 hover:bg-muted/10 transition-colors">
-              <div className="flex items-center gap-3">
-                <FileCheck className={`w-5 h-5 ${["Received", "Reviewed"].includes(doc.status) ? "text-green-500" : "text-muted-foreground"}`} />
-                <span className="font-medium text-sm">{doc.documentLabel}</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <Select value={doc.status} onValueChange={(v) => handleStatusChange(doc.id, v)}>
-                  <SelectTrigger className={`w-[160px] h-8 text-xs font-semibold uppercase tracking-wider ${getStatusColor(doc.status)}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Not requested">Not requested</SelectItem>
-                    <SelectItem value="Requested">Requested</SelectItem>
-                    <SelectItem value="Received">Received</SelectItem>
-                    <SelectItem value="Reviewed">Reviewed</SelectItem>
-                    <SelectItem value="Problem found">Problem found</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+    <SectionCard title={`Due Diligence Documents — ${received} / ${total} Received`}>
+      <Progress value={total > 0 ? (received / total) * 100 : 0} className="h-1 mb-4" />
+      <div className="divide-y divide-border/50">
+        {documents?.map((doc) => (
+          <div key={doc.id} className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <FileCheck className={`w-4 h-4 ${["Received","Reviewed"].includes(doc.status) ? "text-emerald-500" : "text-muted-foreground"}`} />
+              <span className="text-sm">{doc.documentLabel}</span>
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <Select value={doc.status} onValueChange={(v) => { updateDoc.mutate({ id: doc.id, data: { status: v } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListDocumentsQueryKey({ dealId }) }) }); }}>
+              <SelectTrigger className={`w-[150px] h-7 text-[10px] font-semibold uppercase tracking-wider ${statusCls(doc.status)}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["Not requested","Requested","Received","Reviewed","Problem found"].map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
+      </div>
+    </SectionCard>
   );
 }
 
 function NotesTab({ dealId }: { dealId: number }) {
-  const { data: notes, isLoading } = useListNotes({ linkedType: 'deal', linkedId: dealId }, { query: { enabled: !!dealId, queryKey: getListNotesQueryKey({ linkedType: 'deal', linkedId: dealId }) } });
+  const { data: notes, isLoading } = useListNotes({ linkedType: "deal", linkedId: dealId }, { query: { enabled: !!dealId, queryKey: getListNotesQueryKey({ linkedType: "deal", linkedId: dealId }) } });
   const createNote = useCreateNote();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   const [content, setContent] = useState("");
   const [noteType, setNoteType] = useState("General note");
 
   const handleSubmit = () => {
     if (!content.trim()) return;
-    createNote.mutate({ 
-      data: { linkedType: "deal", linkedId: dealId, noteType, content } 
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListNotesQueryKey({ linkedType: 'deal', linkedId: dealId }) });
-        setContent("");
-      }
+    createNote.mutate({ data: { linkedType: "deal", linkedId: dealId, noteType, content } as any }, {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getListNotesQueryKey({ linkedType: "deal", linkedId: dealId }) }); setContent(""); },
     });
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex gap-4">
-            <Select value={noteType} onValueChange={setNoteType}>
-              <SelectTrigger className="w-[180px] bg-card"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="General note">General note</SelectItem>
-                <SelectItem value="Call note">Call note</SelectItem>
-                <SelectItem value="Email note">Email note</SelectItem>
-                <SelectItem value="Site visit note">Site visit note</SelectItem>
-                <SelectItem value="Broker comment">Broker comment</SelectItem>
-                <SelectItem value="Seller claim">Seller claim</SelectItem>
-                <SelectItem value="Underwriting note">Underwriting note</SelectItem>
-                <SelectItem value="Red flag">Red flag</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Textarea 
-            placeholder="Add a note..." 
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="min-h-[100px] resize-none bg-card"
-          />
-          <div className="flex justify-end">
-            <Button onClick={handleSubmit} disabled={!content.trim() || createNote.isPending}>
-              {createNote.isPending ? "Saving..." : "Add Note"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        {isLoading ? (
-          <div className="text-center py-4 text-muted-foreground">Loading notes...</div>
-        ) : notes?.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">No notes yet.</div>
-        ) : notes?.map(note => (
-          <Card key={note.id}>
-            <CardContent className="p-5 space-y-2">
-              <div className="flex items-center justify-between">
-                <Badge variant="outline" className="font-normal text-xs">{note.noteType}</Badge>
+    <div className="space-y-4">
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+        <Select value={noteType} onValueChange={setNoteType}>
+          <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {["General note","Call note","Email note","Site visit note","Broker comment","Seller claim","Underwriting note","Red flag"].map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Textarea placeholder="Add a note..." value={content} onChange={(e) => setContent(e.target.value)} className="min-h-[80px] resize-none text-sm" />
+        <div className="flex justify-end">
+          <Button size="sm" onClick={handleSubmit} disabled={!content.trim() || createNote.isPending}>{createNote.isPending ? "Saving..." : "Add Note"}</Button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {isLoading ? <div className="text-sm text-muted-foreground text-center py-4">Loading...</div>
+          : !notes?.length ? <div className="text-sm text-muted-foreground text-center py-8 bg-card border border-border rounded-lg">No notes yet.</div>
+          : notes.map((note) => (
+            <div key={note.id} className="bg-card border border-border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] px-1.5 py-0.5 border border-border rounded text-muted-foreground font-medium">{note.noteType}</span>
                 <span className="text-xs text-muted-foreground">{new Date(note.createdAt).toLocaleString()}</span>
               </div>
               <div className="text-sm whitespace-pre-wrap">{note.content}</div>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          ))}
       </div>
     </div>
   );
 }
 
 function RemindersTab({ dealId }: { dealId: number }) {
-  const { data: reminders, isLoading } = useListReminders({ linkedType: 'deal', linkedId: dealId }, { query: { enabled: !!dealId, queryKey: getListRemindersQueryKey({ linkedType: 'deal', linkedId: dealId }) } });
+  const { data: reminders, isLoading } = useListReminders({ linkedType: "deal", linkedId: dealId }, { query: { enabled: !!dealId, queryKey: getListRemindersQueryKey({ linkedType: "deal", linkedId: dealId }) } });
   const completeReminder = useCompleteReminder();
   const createReminder = useCreateReminder();
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
-  
-  const [newTitle, setNewTitle] = useState("");
-  const [newDueDate, setNewDueDate] = useState("");
-  const [newPriority, setNewPriority] = useState("Medium");
-  const [newType, setNewType] = useState("Follow up");
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [priority, setPriority] = useState("Medium");
 
   const handleComplete = (id: number) => {
-    completeReminder.mutate({ id }, {
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: 'deal', linkedId: dealId }) })
-    });
+    completeReminder.mutate({ id }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: "deal", linkedId: dealId }) }) });
   };
 
   const handleAdd = () => {
-    if (!newTitle || !newDueDate) return;
-    createReminder.mutate({
-      data: {
-        title: newTitle,
-        dueDate: newDueDate,
-        priority: newPriority,
-        reminderType: newType,
-        linkedType: "deal",
-        linkedId: dealId,
-        completed: false
-      }
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: 'deal', linkedId: dealId }) });
-        setIsAdding(false);
-        setNewTitle(""); setNewDueDate(""); setNewType("Follow up"); setNewPriority("Medium");
-      }
+    if (!title || !dueDate) return;
+    createReminder.mutate({ data: { title, dueDate, priority, linkedType: "deal", linkedId: dealId, completed: false } }, {
+      onSuccess: () => { qc.invalidateQueries({ queryKey: getListRemindersQueryKey({ linkedType: "deal", linkedId: dealId }) }); setIsAdding(false); setTitle(""); setDueDate(""); },
     });
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Reminders</h3>
-        <Button size="sm" onClick={() => setIsAdding(!isAdding)}>{isAdding ? "Cancel" : "Add Reminder"}</Button>
+        <span className="text-sm font-semibold">Reminders</span>
+        <Button size="sm" variant="outline" onClick={() => setIsAdding(!isAdding)}>{isAdding ? "Cancel" : "Add Reminder"}</Button>
+      </div>
+      {isAdding && (
+        <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+          <Input placeholder="What needs to be done?" value={title} onChange={(e) => setTitle(e.target.value)} className="h-8 text-sm" />
+          <div className="flex gap-2">
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-8 text-sm" />
+            <Select value={priority} onValueChange={setPriority}>
+              <SelectTrigger className="h-8 text-sm w-32"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="Low">Low</SelectItem><SelectItem value="Medium">Medium</SelectItem><SelectItem value="High">High</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <Button size="sm" onClick={handleAdd} disabled={!title || !dueDate}>Save Reminder</Button>
+        </div>
+      )}
+      <div className="space-y-2">
+        {isLoading ? <div className="text-sm text-muted-foreground text-center py-4">Loading...</div>
+          : !reminders?.length ? <div className="text-sm text-muted-foreground text-center py-8 bg-card border border-border rounded-lg">No reminders set.</div>
+          : reminders.map((r) => (
+            <div key={r.id} className={`flex items-center gap-3 bg-card border rounded-lg px-4 py-3 ${r.completed ? "opacity-50 border-border" : isOverdue(r.dueDate) ? "border-red-200 bg-red-50/20" : "border-border"}`}>
+              <button onClick={() => !r.completed && handleComplete(r.id)} disabled={r.completed}
+                className="w-5 h-5 rounded-full border-2 border-border flex items-center justify-center shrink-0 hover:border-emerald-400 transition-colors">
+                {r.completed && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+              </button>
+              <div>
+                <div className={`text-sm font-medium ${r.completed ? "line-through text-muted-foreground" : ""}`}>{r.title}</div>
+                <div className={`text-xs mt-0.5 ${isOverdue(r.dueDate) && !r.completed ? "text-red-600" : "text-muted-foreground"}`}>Due {formatDateShort(r.dueDate)}</div>
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function DealDetail() {
+  const { id } = useParams();
+  const dealId = parseInt(id || "0", 10);
+  const qc = useQueryClient();
+  const { data: deal, isLoading } = useGetDeal(dealId, { query: { enabled: !!dealId, queryKey: getGetDealQueryKey(dealId) } });
+  const { data: brokers } = useListBrokers({});
+  const updateDeal = useUpdateDeal();
+
+  if (isLoading || !deal) {
+    return (
+      <div className="p-8 max-w-[1600px] mx-auto space-y-4">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+        <div className="h-64 bg-muted animate-pulse rounded-lg" />
+      </div>
+    );
+  }
+
+  const fin = calculateDealFinancials({ ...deal });
+  const warningCount = fin.warnings.filter((w) => w.level !== "info").length;
+
+  return (
+    <div className="p-8 max-w-[1600px] mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Link href="/deals">
+          <button className="w-8 h-8 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-bold tracking-tight truncate">{deal.dealName}</h1>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <StatusBadge status={deal.status} />
+            <PriorityBadge priority={deal.priority} />
+            {deal.city && <span className="text-xs text-muted-foreground">{deal.city}, {deal.state}</span>}
+            {deal.brokerName && <span className="text-xs text-muted-foreground">· {deal.brokerName}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {warningCount > 0 && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+              <AlertTriangle className="w-3.5 h-3.5" /> {warningCount} warning{warningCount > 1 ? "s" : ""}
+            </span>
+          )}
+          {fin.dscr !== null && (
+            <span className={`text-xs font-semibold border px-2 py-1 rounded ${fin.dscr >= 1.5 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : fin.dscr < 1.25 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+              DSCR {fin.dscr.toFixed(2)}x
+            </span>
+          )}
+        </div>
       </div>
 
-      {isAdding && (
-        <Card className="border-primary/50 shadow-sm">
-          <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <label className="text-sm font-medium">Title *</label>
-                <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="What needs to be done?" />
+      {/* Summary bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+        {[
+          { label: "Asking Price", value: formatCurrency(fin.askingPrice) },
+          { label: "Gross Revenue", value: formatCurrency(fin.grossRevenue) },
+          { label: "Adjusted SDE", value: formatCurrency(fin.adjustedSDE) },
+          { label: "Asking Multiple", value: fmtX(fin.askingMultiple) },
+          { label: "Max Offer", value: formatCurrency(fin.maxOffer) },
+          { label: "Deal Score", value: deal.dealScore != null ? `${deal.dealScore}/100` : "—" },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-card border border-border rounded-lg px-4 py-3">
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">{label}</div>
+            <div className="text-base font-bold">{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main layout — tabs + sidebar */}
+      <div className="flex gap-6 items-start">
+        <div className="flex-1 min-w-0">
+          <Tabs defaultValue="underwriting">
+            <TabsList className="bg-card border w-full justify-start h-auto p-1 overflow-x-auto flex-wrap gap-0.5">
+              <TabsTrigger value="underwriting" className="text-xs">
+                Underwriting
+                {warningCount > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[9px] font-bold px-1.5 rounded-full">{warningCount}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="financials" className="text-xs">Financials</TabsTrigger>
+              <TabsTrigger value="info" className="text-xs">Deal Info</TabsTrigger>
+              <TabsTrigger value="lease" className="text-xs">Lease</TabsTrigger>
+              <TabsTrigger value="operations" className="text-xs">Operations</TabsTrigger>
+              <TabsTrigger value="redflags" className="text-xs">Red Flags</TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs">Documents</TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
+              <TabsTrigger value="reminders" className="text-xs">Reminders</TabsTrigger>
+            </TabsList>
+
+            <div className="mt-5">
+              <TabsContent value="underwriting"><UnderwritingTab deal={deal} /></TabsContent>
+              <TabsContent value="financials"><FinancialsForm deal={deal} /></TabsContent>
+              <TabsContent value="info"><DealInfoForm deal={deal} brokers={brokers || []} /></TabsContent>
+              <TabsContent value="lease"><LeaseForm deal={deal} /></TabsContent>
+              <TabsContent value="operations"><OperationsForm deal={deal} /></TabsContent>
+              <TabsContent value="redflags"><RedFlagsTab dealId={dealId} /></TabsContent>
+              <TabsContent value="documents"><DocumentsTab dealId={dealId} /></TabsContent>
+              <TabsContent value="notes"><NotesTab dealId={dealId} /></TabsContent>
+              <TabsContent value="reminders"><RemindersTab dealId={dealId} /></TabsContent>
+            </div>
+          </Tabs>
+        </div>
+
+        {/* Sidebar */}
+        <div className="w-52 shrink-0 space-y-4">
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <div className="px-3 py-2 border-b border-border bg-muted/20">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Quick Actions</span>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground block mb-1">Status</label>
+                <Select value={deal.status} onValueChange={(v) => updateDeal.mutate({ id: dealId, data: { status: v } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) }) })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{ALL_STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Due Date *</label>
-                <Input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <Select value={newPriority} onValueChange={setNewPriority}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Low">Low</SelectItem>
-                    <SelectItem value="Medium">Medium</SelectItem>
-                    <SelectItem value="High">High</SelectItem>
-                  </SelectContent>
+              <div>
+                <label className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground block mb-1">Priority</label>
+                <Select value={deal.priority} onValueChange={(v) => updateDeal.mutate({ id: dealId, data: { priority: v } }, { onSuccess: () => qc.invalidateQueries({ queryKey: getGetDealQueryKey(dealId) }) })}>
+                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{["Hot","High","Medium","Low"].map((p) => <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="flex justify-end pt-2">
-              <Button onClick={handleAdd} disabled={!newTitle || !newDueDate || createReminder.isPending}>Save Reminder</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
 
-      <div className="space-y-3">
-        {isLoading ? (
-          <div className="text-center py-4 text-muted-foreground">Loading reminders...</div>
-        ) : reminders?.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground border rounded-lg bg-card">No reminders set.</div>
-        ) : reminders?.map(r => (
-          <Card key={r.id} className={r.completed ? "opacity-50" : ""}>
-            <CardContent className="p-4 flex items-center justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="rounded-full h-6 w-6 mt-0.5 text-muted-foreground hover:text-green-500 shrink-0"
-                  onClick={() => !r.completed && handleComplete(r.id)}
-                  disabled={r.completed}
-                >
-                  <CheckCircle2 className="h-5 w-5" />
-                </Button>
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            <div className="px-3 py-2 border-b border-border bg-muted/20">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Key Contacts</span>
+            </div>
+            <div className="p-3 space-y-3">
+              {deal.brokerId ? (
                 <div>
-                  <div className={`font-medium ${r.completed ? "line-through text-muted-foreground" : ""}`}>{r.title}</div>
-                  <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                    <span className={!r.completed && isOverdue(r.dueDate) ? "text-red-500 font-medium" : ""}>
-                      Due: {formatDateShort(r.dueDate)}
-                    </span>
-                  </div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">Broker</div>
+                  <Link href={`/brokers/${deal.brokerId}`}><span className="text-xs font-medium text-primary hover:underline cursor-pointer">{deal.brokerName}</span></Link>
                 </div>
-              </div>
-              {!r.completed && r.priority === "High" && (
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">High</Badge>
+              ) : <div className="text-xs text-muted-foreground italic">No broker assigned</div>}
+              {deal.sellerName && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground mb-0.5">Seller</div>
+                  <div className="text-xs font-medium">{deal.sellerName}</div>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          </div>
+
+          {deal.nextAction && (
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="px-3 py-2 border-b border-border bg-muted/20">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Next Action</span>
+              </div>
+              <div className="p-3">
+                <div className="text-xs font-medium text-foreground mb-1">{deal.nextAction}</div>
+                <div className={`text-[10px] font-medium ${isOverdue(deal.nextActionDueDate) ? "text-red-600" : "text-muted-foreground"}`}>{formatDateShort(deal.nextActionDueDate)}</div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
