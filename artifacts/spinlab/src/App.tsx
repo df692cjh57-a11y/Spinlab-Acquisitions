@@ -18,7 +18,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <div className="dark min-h-screen bg-background text-foreground">
+          <div className="min-h-screen bg-background text-foreground">
             <Layout>
               <Switch>
                 <Route path="/" component={Dashboard} />

@@ -1,0 +1,271 @@
+Now improve the app into a more polished acquisitions CRM.
+
+Focus on making the Deals and Brokers pages actually useful for daily acquisition work.
+
+1. Improve navigation
+- Add a left sidebar with:
+  - Dashboard
+  - Deals
+  - Brokers
+  - Reminders
+- Make the active page visually clear.
+- Keep the layout clean and professional.
+
+2. Improve the Deals page
+Make the Deals page the main operating screen.
+
+Add:
+- Search bar
+- Filters for status, priority, city, broker, and overdue follow-up
+- Sortable columns
+- Status badges
+- Priority badges
+- Red flag score badge
+- Deal score badge
+
+The Deals table should show:
+
+- Deal name
+- City
+- Asking price
+- Gross revenue
+- Adjusted net income
+- Asking multiple
+- Rent as % of gross
+- Status
+- Priority
+- Broker
+- Next action
+- Due date
+- Red flag score
+- Deal score
+
+When clicking a deal, open a detail view.
+
+3. Improve the Deal detail view
+Organize it into sections:
+
+A. Basic Info
+B. Financials
+C. Lease / Real Estate
+D. Laundromat Operations
+E. Red Flags
+F. Documents
+G. Notes
+H. Reminders
+
+Make it easy to edit each section.
+
+4. Add automatic calculations
+
+For every deal calculate:
+
+- Annual rent = monthly rent x 12
+- Asking multiple = asking price / adjusted net income
+- Rent as % of gross = annual rent / gross revenue
+- Rent per square foot = annual rent / square footage
+
+Format these properly:
+- Currency with dollar signs
+- Percentages with %
+- Multiples with “x”
+
+Example:
+- $950,000
+- 18.4%
+- 4.7x
+
+5. Add deal scoring logic
+
+Create a deal score from 0 to 100.
+
+Start at 100 and subtract points:
+
+- Red flag score subtracts 4 points per red flag
+- Asking multiple above 4.0x subtracts 10 points
+- Asking multiple above 5.0x subtracts 20 points
+- Rent as % of gross above 15% subtracts 10 points
+- Rent as % of gross above 20% subtracts 20 points
+- Lease years remaining under 5 subtracts 15 points
+- Machine age above 12 years subtracts 10 points
+- No card system subtracts 5 points
+- No wash-and-fold subtracts 5 points
+- No pickup/delivery subtracts 5 points
+- No commercial accounts subtracts 5 points
+
+Minimum score is 0. Maximum score is 100.
+
+Display quality label:
+
+- 80–100 = Strong Target
+- 60–79 = Worth Underwriting
+- 40–59 = Maybe
+- 0–39 = Weak
+
+6. Add stalled deal logic
+
+If a deal has no next action or no next action due date, automatically mark it as “Stalled” or display a red “Stalled” warning.
+
+7. Improve reminders
+
+Create a reminders page with grouped sections:
+
+- Overdue
+- Due Today
+- Due This Week
+- Future
+- Completed
+
+Every reminder should show:
+- Title
+- Linked deal or broker
+- Due date
+- Priority
+- Reminder type
+- Complete button
+
+Also show overdue reminders on the Dashboard.
+
+8. Improve Brokers page
+
+Broker table should show:
+
+- Broker name
+- Company
+- Market
+- Specialty
+- Relationship strength
+- Deals sent
+- Hot deals sent
+- Last contact
+- Next follow-up
+- Rating
+
+Add search and filters for:
+- Market
+- Specialty
+- Relationship strength
+- Next follow-up due
+- Broker type
+
+When clicking a broker, show:
+- Contact info
+- Linked deals
+- Notes
+- Reminders
+- Broker rating
+- Last contact
+- Next follow-up
+
+9. Broker scoring
+
+Create a broker score from 0 to 100 based on:
+
+- Trust rating
+- Responsiveness rating
+- Deal quality rating
+- Number of deals sent
+- Number of hot deals sent
+- Recent contact activity
+
+Show broker quality label:
+
+- 80–100 = Key Source
+- 60–79 = Good Source
+- 40–59 = Average
+- 0–39 = Weak Source
+
+10. Add notes timeline
+
+Each deal and broker should have a notes timeline.
+
+Each note should show:
+- Note type
+- Date
+- Text
+
+Allow adding new notes from the deal detail page and broker detail page.
+
+11. Add due diligence checklist
+
+Inside each deal, add a document checklist with these statuses:
+
+- Not requested
+- Requested
+- Received
+- Reviewed
+- Problem found
+
+Documents:
+- Tax returns
+- P&L
+- Utility bills
+- Lease
+- Equipment list
+- Machine age report
+- Card system reports
+- Bank statements
+- Payroll records
+- Insurance
+- Repair invoices
+- Water bills
+- Gas bills
+- Electric bills
+- Sales tax filings
+- Employee schedule
+- Vendor contracts
+- POS/card system login
+- Landlord consent
+- UCC/lien search
+
+Show checklist progress as a percentage.
+
+12. Dashboard improvements
+
+Dashboard should show:
+
+- Total active deals
+- Hot deals
+- Stalled deals
+- Deals needing follow-up today
+- Overdue reminders
+- Brokers needing follow-up
+- Deals in underwriting
+- LOIs sent
+- Average asking price
+- Average asking multiple
+
+Also add small tables for:
+
+- Hot Deals
+- Overdue Follow-Ups
+- Recently Added Deals
+- Top Brokers
+
+13. UI polish
+
+Make the design feel like a modern acquisition dashboard:
+- Clean white/gray background
+- Good spacing
+- Rounded cards
+- Professional tables
+- Clear badges
+- Sticky table headers if possible
+- Mobile responsive
+- No clutter
+
+14. Data integrity
+
+Add form validation:
+- Asking price must be a number
+- Gross revenue must be a number
+- Adjusted net income must be a number
+- Dates must be valid
+- Email must be valid
+- Required fields should be marked clearly
+
+15. Keep everything persistent
+
+Make sure all created deals, brokers, reminders, notes, and checklist updates save properly and remain after refresh.
+
+Do not remove existing functionality. Improve and extend what is already built.

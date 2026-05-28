@@ -40,8 +40,9 @@ router.get("/reminders", async (req, res) => {
     const params = ListRemindersQueryParams.parse(req.query);
     let reminders = await db.select().from(remindersTable).orderBy(remindersTable.dueDate);
 
-    if (params.completed !== undefined) {
-      const completed = String(params.completed) === "true";
+    // Read completed directly from raw query to avoid zod.coerce.boolean() treating "false" as true
+    if (req.query.completed !== undefined) {
+      const completed = req.query.completed === "true";
       reminders = reminders.filter((r) => r.completed === completed);
     }
     if (params.linkedType) {
