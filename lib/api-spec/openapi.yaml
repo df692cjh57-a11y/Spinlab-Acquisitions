@@ -1,22 +1,33 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Spinlab Deal Desk API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: deals
+    description: Deal operations
+  - name: brokers
+    description: Broker operations
+  - name: reminders
+    description: Reminder operations
+  - name: notes
+    description: Note operations
+  - name: documents
+    description: Document operations
+  - name: dashboard
+    description: Dashboard aggregates
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +35,596 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── DASHBOARD ────────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard metric cards
+      responses:
+        "200":
+          description: Summary metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/pipeline:
+    get:
+      operationId: getDashboardPipeline
+      tags: [dashboard]
+      summary: Get deals by status for pipeline view
+      responses:
+        "200":
+          description: Pipeline data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineStage"
+
+  # ─── DEALS ────────────────────────────────────────────────────────────────
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [deals]
+      summary: List all deals
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: brokerId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: overdueOnly
+          in: query
+          schema:
+            type: boolean
+        - name: followUpToday
+          in: query
+          schema:
+            type: boolean
+        - name: hotOnly
+          in: query
+          schema:
+            type: boolean
+        - name: deadOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+    post:
+      operationId: createDeal
+      tags: [deals]
+      summary: Create a new deal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealInput"
+      responses:
+        "201":
+          description: Created deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+
+  /deals/{id}:
+    get:
+      operationId: getDeal
+      tags: [deals]
+      summary: Get a deal by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deal details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateDeal
+      tags: [deals]
+      summary: Update a deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealUpdate"
+      responses:
+        "200":
+          description: Updated deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+    delete:
+      operationId: deleteDeal
+      tags: [deals]
+      summary: Delete a deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /deals/{id}/red-flags:
+    get:
+      operationId: getDealRedFlags
+      tags: [deals]
+      summary: Get red flags for a deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Red flag checklist
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RedFlag"
+    put:
+      operationId: updateDealRedFlags
+      tags: [deals]
+      summary: Update red flags for a deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedFlagUpdate"
+      responses:
+        "200":
+          description: Updated red flags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RedFlag"
+
+  # ─── BROKERS ──────────────────────────────────────────────────────────────
+  /brokers:
+    get:
+      operationId: listBrokers
+      tags: [brokers]
+      summary: List all brokers
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: market
+          in: query
+          schema:
+            type: string
+        - name: relationshipStrength
+          in: query
+          schema:
+            type: string
+        - name: followUpToday
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of brokers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Broker"
+    post:
+      operationId: createBroker
+      tags: [brokers]
+      summary: Create a new broker
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrokerInput"
+      responses:
+        "201":
+          description: Created broker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broker"
+
+  /brokers/{id}:
+    get:
+      operationId: getBroker
+      tags: [brokers]
+      summary: Get a broker by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Broker details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broker"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateBroker
+      tags: [brokers]
+      summary: Update a broker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrokerUpdate"
+      responses:
+        "200":
+          description: Updated broker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broker"
+    delete:
+      operationId: deleteBroker
+      tags: [brokers]
+      summary: Delete a broker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /brokers/{id}/deals:
+    get:
+      operationId: getBrokerDeals
+      tags: [brokers]
+      summary: Get all deals linked to a broker
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deals for broker
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+
+  # ─── REMINDERS ────────────────────────────────────────────────────────────
+  /reminders:
+    get:
+      operationId: listReminders
+      tags: [reminders]
+      summary: List all reminders
+      parameters:
+        - name: completed
+          in: query
+          schema:
+            type: boolean
+        - name: linkedType
+          in: query
+          schema:
+            type: string
+        - name: linkedId
+          in: query
+          schema:
+            type: integer
+        - name: overdueOnly
+          in: query
+          schema:
+            type: boolean
+        - name: dueToday
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reminder"
+    post:
+      operationId: createReminder
+      tags: [reminders]
+      summary: Create a new reminder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReminderInput"
+      responses:
+        "201":
+          description: Created reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+
+  /reminders/{id}:
+    get:
+      operationId: getReminder
+      tags: [reminders]
+      summary: Get a reminder by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+    patch:
+      operationId: updateReminder
+      tags: [reminders]
+      summary: Update a reminder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReminderUpdate"
+      responses:
+        "200":
+          description: Updated reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+    delete:
+      operationId: deleteReminder
+      tags: [reminders]
+      summary: Delete a reminder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /reminders/{id}/complete:
+    patch:
+      operationId: completeReminder
+      tags: [reminders]
+      summary: Mark a reminder as completed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Completed reminder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+
+  # ─── NOTES ────────────────────────────────────────────────────────────────
+  /notes:
+    get:
+      operationId: listNotes
+      tags: [notes]
+      summary: List notes
+      parameters:
+        - name: linkedType
+          in: query
+          schema:
+            type: string
+        - name: linkedId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Create a new note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+
+  /notes/{id}:
+    patch:
+      operationId: updateNote
+      tags: [notes]
+      summary: Update a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteUpdate"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+    delete:
+      operationId: deleteNote
+      tags: [notes]
+      summary: Delete a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── DOCUMENTS ────────────────────────────────────────────────────────────
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List documents for a deal
+      parameters:
+        - name: dealId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /documents/{id}:
+    patch:
+      operationId: updateDocument
+      tags: [documents]
+      summary: Update a document status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentUpdate"
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +632,631 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ─── DASHBOARD ─────────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      required:
+        - totalActiveDeals
+        - hotDeals
+        - followUpToday
+        - overdueReminders
+        - brokersNeedingFollowUp
+        - dealsInUnderwriting
+        - loisSent
+        - deadDeals
+        - avgAskingPrice
+        - avgAskingMultiple
+        - stalledDeals
+        - recentDeals
+        - todayReminders
+      properties:
+        totalActiveDeals:
+          type: integer
+        hotDeals:
+          type: integer
+        followUpToday:
+          type: integer
+        overdueReminders:
+          type: integer
+        brokersNeedingFollowUp:
+          type: integer
+        dealsInUnderwriting:
+          type: integer
+        loisSent:
+          type: integer
+        deadDeals:
+          type: integer
+        avgAskingPrice:
+          type: ["number", "null"]
+        avgAskingMultiple:
+          type: ["number", "null"]
+        stalledDeals:
+          type: integer
+        recentDeals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Deal"
+        todayReminders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reminder"
+
+    PipelineStage:
+      type: object
+      required: [status, count]
+      properties:
+        status:
+          type: string
+        count:
+          type: integer
+        totalValue:
+          type: ["number", "null"]
+
+    # ─── DEAL ──────────────────────────────────────────────────────────────
+    Deal:
+      type: object
+      required:
+        - id
+        - dealName
+        - status
+        - priority
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        dealName:
+          type: string
+        businessName:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        assetType:
+          type: ["string", "null"]
+        source:
+          type: ["string", "null"]
+        brokerId:
+          type: ["integer", "null"]
+        brokerName:
+          type: ["string", "null"]
+        sellerName:
+          type: ["string", "null"]
+        askingPrice:
+          type: ["number", "null"]
+        grossRevenue:
+          type: ["number", "null"]
+        netIncome:
+          type: ["number", "null"]
+        adjustedNetIncome:
+          type: ["number", "null"]
+        monthlyRent:
+          type: ["number", "null"]
+        annualRent:
+          type: ["number", "null"]
+        leaseYearsRemaining:
+          type: ["number", "null"]
+        renewalOptions:
+          type: ["string", "null"]
+        squareFootage:
+          type: ["number", "null"]
+        rentPerSqFt:
+          type: ["number", "null"]
+        numWashers:
+          type: ["integer", "null"]
+        numDryers:
+          type: ["integer", "null"]
+        machineBrand:
+          type: ["string", "null"]
+        avgMachineAge:
+          type: ["number", "null"]
+        cardOrCoin:
+          type: ["string", "null"]
+        washAndFold:
+          type: ["boolean", "null"]
+        pickupDelivery:
+          type: ["boolean", "null"]
+        commercialAccounts:
+          type: ["boolean", "null"]
+        hoursOfOperation:
+          type: ["string", "null"]
+        staffCount:
+          type: ["integer", "null"]
+        ownerOperated:
+          type: ["boolean", "null"]
+        status:
+          type: string
+        priority:
+          type: string
+        nextAction:
+          type: ["string", "null"]
+        nextActionDueDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        askingMultiple:
+          type: ["number", "null"]
+        rentAsPercentGross:
+          type: ["number", "null"]
+        redFlagScore:
+          type: integer
+        redFlagLevel:
+          type: string
+        dealScore:
+          type: integer
+        dealQuality:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    DealInput:
+      type: object
+      required: [dealName, status, priority]
+      properties:
+        dealName:
+          type: string
+        businessName:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        assetType:
+          type: string
+        source:
+          type: string
+        brokerId:
+          type: ["integer", "null"]
+        sellerName:
+          type: string
+        askingPrice:
+          type: ["number", "null"]
+        grossRevenue:
+          type: ["number", "null"]
+        netIncome:
+          type: ["number", "null"]
+        adjustedNetIncome:
+          type: ["number", "null"]
+        monthlyRent:
+          type: ["number", "null"]
+        leaseYearsRemaining:
+          type: ["number", "null"]
+        renewalOptions:
+          type: string
+        squareFootage:
+          type: ["number", "null"]
+        numWashers:
+          type: ["integer", "null"]
+        numDryers:
+          type: ["integer", "null"]
+        machineBrand:
+          type: string
+        avgMachineAge:
+          type: ["number", "null"]
+        cardOrCoin:
+          type: string
+        washAndFold:
+          type: boolean
+        pickupDelivery:
+          type: boolean
+        commercialAccounts:
+          type: boolean
+        hoursOfOperation:
+          type: string
+        staffCount:
+          type: ["integer", "null"]
+        ownerOperated:
+          type: boolean
+        status:
+          type: string
+        priority:
+          type: string
+        nextAction:
+          type: string
+        nextActionDueDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        notes:
+          type: string
+
+    DealUpdate:
+      type: object
+      properties:
+        dealName:
+          type: string
+        businessName:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        assetType:
+          type: string
+        source:
+          type: string
+        brokerId:
+          type: ["integer", "null"]
+        sellerName:
+          type: string
+        askingPrice:
+          type: ["number", "null"]
+        grossRevenue:
+          type: ["number", "null"]
+        netIncome:
+          type: ["number", "null"]
+        adjustedNetIncome:
+          type: ["number", "null"]
+        monthlyRent:
+          type: ["number", "null"]
+        leaseYearsRemaining:
+          type: ["number", "null"]
+        renewalOptions:
+          type: string
+        squareFootage:
+          type: ["number", "null"]
+        numWashers:
+          type: ["integer", "null"]
+        numDryers:
+          type: ["integer", "null"]
+        machineBrand:
+          type: string
+        avgMachineAge:
+          type: ["number", "null"]
+        cardOrCoin:
+          type: string
+        washAndFold:
+          type: boolean
+        pickupDelivery:
+          type: boolean
+        commercialAccounts:
+          type: boolean
+        hoursOfOperation:
+          type: string
+        staffCount:
+          type: ["integer", "null"]
+        ownerOperated:
+          type: boolean
+        status:
+          type: string
+        priority:
+          type: string
+        nextAction:
+          type: string
+        nextActionDueDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        notes:
+          type: string
+
+    # ─── RED FLAGS ─────────────────────────────────────────────────────────
+    RedFlag:
+      type: object
+      required: [id, dealId, flagKey, flagLabel, checked]
+      properties:
+        id:
+          type: integer
+        dealId:
+          type: integer
+        flagKey:
+          type: string
+        flagLabel:
+          type: string
+        checked:
+          type: boolean
+
+    RedFlagUpdate:
+      type: object
+      required: [flags]
+      properties:
+        flags:
+          type: array
+          items:
+            type: object
+            required: [flagKey, checked]
+            properties:
+              flagKey:
+                type: string
+              checked:
+                type: boolean
+
+    # ─── BROKER ────────────────────────────────────────────────────────────
+    Broker:
+      type: object
+      required:
+        - id
+        - name
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        company:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        market:
+          type: ["string", "null"]
+        specialty:
+          type: ["string", "null"]
+        brokerType:
+          type: ["string", "null"]
+        relationshipStrength:
+          type: ["string", "null"]
+        trustRating:
+          type: ["integer", "null"]
+        responsivenessRating:
+          type: ["integer", "null"]
+        dealQualityRating:
+          type: ["integer", "null"]
+        firstContactedDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        nextFollowUpDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        tags:
+          type: ["string", "null"]
+        dealCount:
+          type: integer
+        hotDealCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    BrokerInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        company:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        market:
+          type: string
+        specialty:
+          type: string
+        brokerType:
+          type: string
+        relationshipStrength:
+          type: string
+        trustRating:
+          type: ["integer", "null"]
+        responsivenessRating:
+          type: ["integer", "null"]
+        dealQualityRating:
+          type: ["integer", "null"]
+        firstContactedDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        nextFollowUpDate:
+          type: ["string", "null"]
+        notes:
+          type: string
+        tags:
+          type: string
+
+    BrokerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        company:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        market:
+          type: string
+        specialty:
+          type: string
+        brokerType:
+          type: string
+        relationshipStrength:
+          type: string
+        trustRating:
+          type: ["integer", "null"]
+        responsivenessRating:
+          type: ["integer", "null"]
+        dealQualityRating:
+          type: ["integer", "null"]
+        firstContactedDate:
+          type: ["string", "null"]
+        lastContactedDate:
+          type: ["string", "null"]
+        nextFollowUpDate:
+          type: ["string", "null"]
+        notes:
+          type: string
+        tags:
+          type: string
+
+    # ─── REMINDER ──────────────────────────────────────────────────────────
+    Reminder:
+      type: object
+      required:
+        - id
+        - title
+        - dueDate
+        - priority
+        - completed
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        linkedType:
+          type: ["string", "null"]
+        linkedId:
+          type: ["integer", "null"]
+        linkedName:
+          type: ["string", "null"]
+        dueDate:
+          type: string
+        priority:
+          type: string
+        completed:
+          type: boolean
+        completedAt:
+          type: ["string", "null"]
+        reminderType:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ReminderInput:
+      type: object
+      required: [title, dueDate, priority]
+      properties:
+        title:
+          type: string
+        linkedType:
+          type: ["string", "null"]
+        linkedId:
+          type: ["integer", "null"]
+        dueDate:
+          type: string
+        priority:
+          type: string
+        reminderType:
+          type: string
+        notes:
+          type: string
+
+    ReminderUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        linkedType:
+          type: ["string", "null"]
+        linkedId:
+          type: ["integer", "null"]
+        dueDate:
+          type: string
+        priority:
+          type: string
+        completed:
+          type: boolean
+        reminderType:
+          type: string
+        notes:
+          type: string
+
+    # ─── NOTE ──────────────────────────────────────────────────────────────
+    Note:
+      type: object
+      required:
+        - id
+        - linkedType
+        - linkedId
+        - noteText
+        - noteType
+        - createdAt
+      properties:
+        id:
+          type: integer
+        linkedType:
+          type: string
+        linkedId:
+          type: integer
+        linkedName:
+          type: ["string", "null"]
+        noteType:
+          type: string
+        noteText:
+          type: string
+        createdAt:
+          type: string
+
+    NoteInput:
+      type: object
+      required: [linkedType, linkedId, noteText, noteType]
+      properties:
+        linkedType:
+          type: string
+        linkedId:
+          type: integer
+        noteType:
+          type: string
+        noteText:
+          type: string
+
+    NoteUpdate:
+      type: object
+      properties:
+        noteType:
+          type: string
+        noteText:
+          type: string
+
+    # ─── DOCUMENT ──────────────────────────────────────────────────────────
+    Document:
+      type: object
+      required:
+        - id
+        - dealId
+        - docKey
+        - docLabel
+        - status
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        dealId:
+          type: integer
+        docKey:
+          type: string
+        docLabel:
+          type: string
+        status:
+          type: string
+        updatedAt:
+          type: string
+
+    DocumentUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string

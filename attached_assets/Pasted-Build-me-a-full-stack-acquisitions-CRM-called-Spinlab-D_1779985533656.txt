@@ -1,0 +1,477 @@
+Build me a full-stack acquisitions CRM called “Spinlab Deal Desk.”
+
+This CRM is for buying laundromats first, but it should be expandable later for real estate deals like retail, multifamily, mixed-use, and business acquisitions.
+
+Use a clean, modern, professional dashboard design. The app should feel like an acquisitions command center: organized, table-heavy, easy to scan, and built around follow-up discipline.
+
+The app should have these main pages:
+
+1. Deals
+2. Brokers
+3. Reminders
+4. Dashboard
+
+Start with laundromat acquisitions.
+
+CORE RULE:
+Every deal and every broker must have a next action and a due date. If a deal has no next action, mark it as “Stalled.”
+
+--------------------------------
+DASHBOARD PAGE
+--------------------------------
+
+Create a dashboard with metric cards showing:
+
+- Total active deals
+- Hot deals
+- Deals needing follow-up today
+- Overdue reminders
+- Brokers needing follow-up
+- Deals in underwriting
+- LOIs sent
+- Dead deals
+- Average asking price
+- Average asking multiple
+
+Also show:
+
+- Reminders due today
+- Overdue reminders
+- Recently added deals
+- Hot deals
+- Stalled deals
+
+--------------------------------
+DEALS PAGE
+--------------------------------
+
+Create a Deals page with a table view, search, filters, and sortable columns.
+
+Table columns:
+
+- Deal name
+- City
+- State
+- Asking price
+- Gross revenue
+- Adjusted net income
+- Asking multiple
+- Rent as % of gross
+- Status
+- Priority
+- Broker
+- Next action
+- Due date
+- Red flag score
+- Deal score
+
+Add filters for:
+
+- Status
+- Priority
+- City
+- State
+- Broker
+- Asset type
+- Has real estate
+- Business only
+- Follow-up due today
+- Overdue
+- Hot deals
+- Dead deals
+- High red flag score
+
+Each deal should have a detail page or side panel.
+
+Deal fields:
+
+- Deal name
+- Business name
+- Address
+- City
+- State
+- Asset type
+- Source
+- Linked broker
+- Seller name
+- Asking price
+- Gross revenue
+- Net income
+- Adjusted net income
+- Monthly rent
+- Annual rent
+- Lease years remaining
+- Renewal options
+- Square footage
+- Rent per square foot
+- Number of washers
+- Number of dryers
+- Machine brand
+- Average machine age
+- Card system or coin
+- Wash-and-fold offered
+- Pickup/delivery offered
+- Commercial accounts
+- Hours of operation
+- Staff count
+- Owner-operated or absentee
+- Status
+- Priority
+- Next action
+- Next action due date
+- Last contacted date
+- Notes
+
+Deal statuses:
+
+- New Lead
+- Contacted Broker
+- NDA Sent
+- Financials Requested
+- Financials Received
+- Underwriting
+- Site Visit Scheduled
+- LOI Sent
+- Negotiation
+- Under Contract
+- Due Diligence
+- Financing
+- Closed
+- Dead Deal
+- Follow Up Later
+- Stalled
+
+Priority options:
+
+- Low
+- Medium
+- High
+- Hot
+
+--------------------------------
+LAUNDROMAT RED FLAG CHECKLIST
+--------------------------------
+
+Each deal should have a red flag checklist with these items:
+
+- Financials are handwritten
+- Seller claims cash income
+- No tax returns
+- Old machines
+- Short lease
+- Rent above 20% of gross
+- Utilities look too low
+- Payroll looks too low
+- Owner works many hours
+- No card system data
+- Bad reviews
+- Poor location visibility
+- Weak parking
+- Equipment near end of life
+- Landlord approval uncertain
+- Seller financing refused
+- Asking price too high
+- No clear reason for sale
+- Lease assignment unclear
+- Revenue declining
+- Competition nearby is stronger
+
+Calculate Red Flag Score as the number of checked red flags.
+
+Show risk level:
+
+- 0–2 = Clean
+- 3–5 = Caution
+- 6–8 = High Risk
+- 9+ = Dangerous
+
+--------------------------------
+DEAL CALCULATIONS
+--------------------------------
+
+Automatically calculate:
+
+- Asking multiple = Asking price / Adjusted net income
+- Rent as % of gross = Annual rent / Gross revenue
+- Annual rent = Monthly rent x 12
+- Rent per square foot = Annual rent / Square footage
+
+Create a simple Deal Score from 0 to 100 based on:
+
+- Clean financials
+- Strong lease
+- Reasonable asking multiple
+- Low rent as % of gross
+- Newer machines
+- Good location
+- Upside from wash-and-fold
+- Upside from pickup/delivery
+- Upside from commercial accounts
+- Low red flag score
+
+Display deal quality:
+
+- 80–100 = Strong Target
+- 60–79 = Worth Underwriting
+- 40–59 = Maybe
+- Below 40 = Weak
+
+--------------------------------
+BROKERS PAGE
+--------------------------------
+
+Create a Brokers page with a table view, search, filters, and sortable columns.
+
+Broker table columns:
+
+- Broker name
+- Company
+- Market
+- Specialty
+- Relationship strength
+- Deals sent
+- Hot deals sent
+- Last contact
+- Next follow-up
+- Rating
+
+Broker fields:
+
+- Name
+- Company
+- Phone
+- Email
+- Website
+- Market
+- Specialty
+- Broker type
+- Relationship strength
+- Trust rating
+- Responsiveness rating
+- Deal quality rating
+- First contacted date
+- Last contacted date
+- Next follow-up date
+- Notes
+
+Broker type options:
+
+- Business Broker
+- CRE Broker
+- Seller Rep
+- Buyer Rep
+- Landlord Broker
+- Lender
+- Attorney
+- Consultant
+- Other
+
+Relationship strength options:
+
+- Cold
+- Warm
+- Strong
+- Key Contact
+
+Broker tags:
+
+- Laundromat specialist
+- Sends off-market deals
+- Inflates numbers
+- Good financials
+- Slow responder
+- Strong landlord relationships
+- Pushy
+- Honest
+- Seller financing friendly
+- NYC
+- NJ
+- Philly
+- Long Island
+- Brooklyn
+- Queens
+- Manhattan
+- Bronx
+- Staten Island
+
+Each broker detail page should show:
+
+- Contact info
+- Notes
+- Linked deals
+- Call history
+- Last contact date
+- Next follow-up
+- Broker score
+- Deal quality rating
+
+--------------------------------
+REMINDERS PAGE
+--------------------------------
+
+Create a reminders system.
+
+Reminder fields:
+
+- Reminder title
+- Linked type: Deal or Broker
+- Linked deal or broker
+- Due date
+- Priority
+- Completed status
+- Reminder type
+- Notes
+
+Reminder types:
+
+- Call broker
+- Follow up on financials
+- Request lease
+- Schedule site visit
+- Send LOI
+- Review tax returns
+- Ask about seller financing
+- Check zoning
+- Call lender
+- Follow up after no response
+- Revisit dead deal
+- Review underwriting
+- Request utility bills
+- Ask for machine list
+- Ask for card system reports
+
+Show reminders grouped by:
+
+- Overdue
+- Due today
+- Due this week
+- Completed
+
+--------------------------------
+NOTES / TIMELINE
+--------------------------------
+
+Each deal and broker should have a notes timeline.
+
+Note fields:
+
+- Linked deal or broker
+- Note type
+- Note text
+- Created date
+
+Note types:
+
+- Call note
+- Email note
+- Site visit note
+- Broker comment
+- Seller claim
+- Underwriting note
+- Red flag
+- General note
+
+--------------------------------
+DOCUMENT CHECKLIST
+--------------------------------
+
+For each laundromat deal, add a due diligence checklist:
+
+- Tax returns
+- P&L
+- Utility bills
+- Lease
+- Equipment list
+- Machine age report
+- Card system reports
+- Bank statements
+- Payroll records
+- Insurance
+- Repair invoices
+- Water bills
+- Gas bills
+- Electric bills
+- Sales tax filings
+- Employee schedule
+- Vendor contracts
+- POS/card system login
+- Landlord consent
+- UCC/lien search
+
+Each document should have status:
+
+- Not requested
+- Requested
+- Received
+- Reviewed
+- Problem found
+
+--------------------------------
+DATABASE
+--------------------------------
+
+Use persistent database storage.
+
+Create tables:
+
+deals
+brokers
+reminders
+notes
+documents
+
+Make sure deals can link to brokers.
+
+Make sure reminders can link to either a deal or broker.
+
+Make sure notes can link to either a deal or broker.
+
+--------------------------------
+SEED DATA
+--------------------------------
+
+Add sample data for:
+
+- 3 laundromat deals
+- 3 brokers
+- 5 reminders
+- Some notes
+
+Make the seed data realistic.
+
+--------------------------------
+DESIGN
+--------------------------------
+
+Use a clean SaaS-style dashboard.
+
+Design rules:
+
+- Sidebar navigation
+- Cards for dashboard metrics
+- Tables for deals and brokers
+- Badges for status and priority
+- Red badges for overdue reminders
+- Yellow badges for caution
+- Green badges for strong deals
+- Detail pages or slide-over panels
+- Responsive design for desktop and mobile
+- Professional, minimal, acquisition-focused
+
+Use the name:
+
+Spinlab Deal Desk
+
+Build the first working version with full CRUD:
+- Create deal
+- Edit deal
+- Delete deal
+- View deal
+- Create broker
+- Edit broker
+- Delete broker
+- View broker
+- Create reminder
+- Complete reminder
+- Add notes
+- Link deals to brokers
