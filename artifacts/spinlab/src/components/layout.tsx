@@ -4,7 +4,9 @@ import {
   Users, 
   Bell, 
   LayoutDashboard,
-  Settings
+  Settings,
+  Activity,
+  Zap
 } from "lucide-react";
 import { useListReminders } from "@workspace/api-client-react";
 
@@ -22,49 +24,60 @@ export function Sidebar() {
   ];
 
   return (
-    <div className="w-64 border-r bg-sidebar flex flex-col h-full">
-      <div className="p-6">
-        <h1 className="text-xl font-bold tracking-tight text-sidebar-primary flex items-center gap-2">
-          <div className="w-6 h-6 bg-sidebar-primary rounded-sm flex items-center justify-center">
-            <div className="w-3 h-3 bg-sidebar-primary-foreground rounded-sm"></div>
+    <div className="w-56 border-r bg-sidebar flex flex-col h-full shrink-0">
+      <div className="h-14 flex items-center px-4 border-b border-sidebar-border">
+        <Link href="/">
+          <div className="flex items-center gap-2 cursor-pointer">
+            <div className="w-6 h-6 bg-foreground rounded flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-background" />
+            </div>
+            <span className="font-semibold tracking-tight text-sm text-foreground">Spinlab</span>
+            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider ml-1 mt-0.5 border border-border px-1.5 rounded">HQ</span>
           </div>
-          Spinlab
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider font-semibold">Deal Desk</p>
+        </Link>
       </div>
 
-      <nav className="flex-1 px-4 flex flex-col gap-1 mt-4">
-        {navItems.map((item) => {
-          const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-          return (
-            <Link key={item.href} href={item.href}>
-              <div
-                data-testid={`nav-${item.label.toLowerCase()}`}
-                className={`flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer border-l-4 ${
-                  isActive
-                    ? "bg-primary/10 text-primary border-primary"
-                    : "text-muted-foreground border-transparent hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
-                  {item.label}
+      <div className="flex-1 overflow-y-auto py-4">
+        <div className="px-3 mb-2">
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2">Acquisitions</div>
+        </div>
+        <nav className="px-2 flex flex-col gap-0.5">
+          {navItems.map((item) => {
+            const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+            return (
+              <Link key={item.href} href={item.href}>
+                <div
+                  data-testid={`nav-${item.label.toLowerCase()}`}
+                  className={`flex items-center justify-between px-3 py-1.5 rounded-[4px] text-sm transition-colors cursor-pointer ${
+                    isActive
+                      ? "bg-muted font-medium text-foreground"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                    {item.label}
+                  </div>
+                  {item.badge && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0 rounded-[3px] leading-tight">
+                      {item.badge}
+                    </span>
+                  )}
                 </div>
-                {item.badge && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-            </Link>
-          );
-        })}
-      </nav>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
-      <div className="p-4 border-t border-sidebar-border">
-        <div className="flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-md cursor-pointer transition-colors">
+      <div className="p-3 border-t border-sidebar-border">
+        <div className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-[4px] cursor-pointer transition-colors">
           <Settings className="h-4 w-4" />
           Settings
+        </div>
+        <div className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-[4px] cursor-pointer transition-colors mt-0.5">
+          <div className="w-5 h-5 rounded bg-muted-foreground/20 flex items-center justify-center text-[10px] font-bold text-foreground">JD</div>
+          <span className="truncate">John Doe</span>
         </div>
       </div>
     </div>
@@ -73,9 +86,9 @@ export function Sidebar() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
       <Sidebar />
-      <main className="flex-1 overflow-auto bg-muted/30">
+      <main className="flex-1 overflow-auto bg-background selection:bg-primary/20">
         {children}
       </main>
     </div>

@@ -1,25 +1,88 @@
-import { useGetDashboardSummary, useGetDashboardPipeline } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Briefcase, AlertCircle, Calendar, Users, TrendingUp, DollarSign, FileText, Ban, AlertTriangle, Activity } from "lucide-react";
+import { useGetDashboardSummary } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatMultiple, formatDateShort } from "@/lib/format";
+import { formatCurrency, formatMultiple } from "@/lib/format";
+import { ArrowRight, AlertCircle, TrendingUp, Briefcase, Ban, Activity, DollarSign, FileText, Users } from "lucide-react";
+
+function MetricCard({
+  label,
+  value,
+  sub,
+  href,
+  accent,
+}: {
+  label: string;
+  value: string | number | null;
+  sub?: string;
+  href?: string;
+  accent?: "red" | "blue" | "amber" | "green";
+}) {
+  const accentClass =
+    accent === "red" ? "text-red-600" :
+    accent === "blue" ? "text-primary" :
+    accent === "amber" ? "text-amber-600" :
+    accent === "green" ? "text-emerald-600" :
+    "text-foreground";
+
+  const inner = (
+    <div className="bg-card border border-border rounded-lg p-4 hover:border-border/80 transition-colors group">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">{label}</div>
+      <div className={`text-2xl font-bold tracking-tight ${accentClass}`}>
+        {value ?? "—"}
+      </div>
+      {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+      {href && (
+        <div className="mt-3 flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+          View <ArrowRight className="w-3 h-3" />
+        </div>
+      )}
+    </div>
+  );
+
+  return href ? <Link href={href}>{inner}</Link> : inner;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const closed = status === "Closed";
+  const dead = status === "Dead Deal" || status === "Stalled";
+  const hot = ["Under Contract", "Due Diligence", "Financing", "LOI Sent", "Negotiation"].includes(status);
+  const cls = closed
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : dead
+    ? "bg-red-50 text-red-600 border-red-200"
+    : hot
+    ? "bg-purple-50 text-purple-700 border-purple-200"
+    : "bg-blue-50 text-blue-700 border-blue-200";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`}>
+      {status}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const cls =
+    priority === "Hot" ? "bg-rose-50 text-rose-700 border-rose-200" :
+    priority === "High" ? "bg-amber-50 text-amber-700 border-amber-200" :
+    priority === "Medium" ? "bg-blue-50 text-blue-700 border-blue-200" :
+    "bg-gray-50 text-gray-600 border-gray-200";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`}>
+      {priority}
+    </span>
+  );
+}
 
 export default function Dashboard() {
-  const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
-  const { data: pipeline, isLoading: isLoadingPipeline } = useGetDashboardPipeline();
+  const { data: summary, isLoading } = useGetDashboardSummary();
 
-  if (isLoadingSummary) {
+  if (isLoading) {
     return (
-      <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
-        <h1 className="text-3xl font-bold">Command Center</h1>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+      <div className="p-8 max-w-[1400px] mx-auto space-y-6">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+        <div className="grid grid-cols-4 gap-3">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
+          ))}
         </div>
       </div>
     );
@@ -28,255 +91,240 @@ export default function Dashboard() {
   if (!summary) return null;
 
   return (
-    <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Command Center</h1>
+    <div className="p-8 max-w-[1400px] mx-auto space-y-8">
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">Command Center</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Spinlab Deal Desk — acquisition pipeline overview</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {/* Metric Cards — 2 rows of 4 */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard
-          title="Total Active Deals"
+          label="Active Deals"
           value={summary.totalActiveDeals}
-          icon={Briefcase}
-          link="/deals"
-          className="bg-primary/5 text-primary border-primary/20"
+          sub="in pipeline"
+          href="/deals"
+          accent="blue"
         />
         <MetricCard
-          title="Hot Deals"
+          label="Hot Deals"
           value={summary.hotDeals}
-          icon={TrendingUp}
-          className="bg-orange-500/5 text-orange-600 border-orange-500/20"
-          link="/deals?hotOnly=true"
+          sub="highest priority"
+          href="/deals"
+          accent={summary.hotDeals > 0 ? "amber" : undefined}
         />
         <MetricCard
-          title="Overdue Reminders"
-          value={summary.overdueReminders}
-          icon={AlertCircle}
-          className={summary.overdueReminders > 0 ? "bg-red-500/5 text-red-600 border-red-500/20" : ""}
-          link="/reminders?overdueOnly=true"
-        />
-        <MetricCard
-          title="Due Today"
-          value={summary.followUpToday}
-          icon={Calendar}
-          className={summary.followUpToday > 0 ? "bg-yellow-500/5 text-yellow-600 border-yellow-500/20" : ""}
-          link="/reminders?dueToday=true"
-        />
-        <MetricCard
-          title="Stalled Deals"
+          label="Stalled Deals"
           value={summary.stalledDeals}
-          icon={AlertTriangle}
-          className="bg-muted text-muted-foreground"
-          link="/deals?status=Stalled"
+          sub="need attention"
+          accent={summary.stalledDeals > 0 ? "red" : undefined}
         />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <MetricCard
-          title="Brokers to Follow-up"
+          label="Overdue Follow-Ups"
+          value={summary.overdueReminders}
+          sub="past due reminders"
+          href="/reminders"
+          accent={summary.overdueReminders > 0 ? "red" : undefined}
+        />
+        <MetricCard
+          label="Avg. Asking Multiple"
+          value={summary.avgAskingMultiple ? `${summary.avgAskingMultiple}x` : "—"}
+          sub="across pipeline"
+        />
+        <MetricCard
+          label="Total Pipeline Value"
+          value={summary.totalPipelineValue ? formatCurrency(summary.totalPipelineValue) : "—"}
+          sub="active asking prices"
+          accent="green"
+        />
+        <MetricCard
+          label="Brokers to Contact"
           value={summary.brokersNeedingFollowUp}
-          icon={Users}
-          link="/brokers?followUpDue=true"
+          sub="follow-up due"
+          href="/brokers"
+          accent={summary.brokersNeedingFollowUp > 0 ? "amber" : undefined}
         />
         <MetricCard
-          title="In Underwriting"
-          value={summary.dealsInUnderwriting}
-          icon={Activity}
-          link="/deals?status=Underwriting"
-        />
-        <MetricCard
-          title="LOIs Sent"
+          label="LOIs Sent"
           value={summary.loisSent}
-          icon={FileText}
-          link="/deals?status=LOI Sent"
-        />
-        <MetricCard
-          title="Dead Deals"
-          value={summary.deadDeals}
-          icon={Ban}
-          link="/deals?deadOnly=true"
-        />
-        <MetricCard
-          title="Avg Asking Multiple"
-          value={`${summary.avgAskingMultiple.toFixed(1)}x`}
-          icon={DollarSign}
+          sub="awaiting response"
+          accent={summary.loisSent > 0 ? "blue" : undefined}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Pipeline Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoadingPipeline ? (
-              <Skeleton className="h-64 w-full" />
-            ) : pipeline && pipeline.length > 0 ? (
-              <div className="space-y-5 mt-2">
-                {pipeline.filter(s => s.count > 0).map((stage) => (
-                  <div key={stage.status} className="flex items-center">
-                    <div className="w-48 text-sm font-medium">{stage.status}</div>
-                    <div className="flex-1 mx-4">
-                      <div className="h-3 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary" 
-                          style={{ width: `${Math.min(100, (stage.count / summary.totalActiveDeals) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="w-12 text-right font-medium text-sm">{stage.count}</div>
-                  </div>
+      {/* 4 mini tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Hot Deals */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Hot Deals</span>
+            </div>
+            <Link href="/deals" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          {!summary.hotDealsList || summary.hotDealsList.length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground text-center">No hot deals right now.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 text-left">Deal</th>
+                  <th className="px-3 text-right">Asking</th>
+                  <th className="px-3 text-right">Multiple</th>
+                  <th className="px-4 text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary.hotDealsList as any[]).map((d) => (
+                  <tr key={d.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4">
+                      <Link href={`/deals/${d.id}`}>
+                        <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer">{d.dealName}</div>
+                        <div className="text-xs text-muted-foreground">{[d.city, d.state].filter(Boolean).join(", ")}</div>
+                      </Link>
+                    </td>
+                    <td className="px-3 text-right text-sm">{formatCurrency(d.askingPrice)}</td>
+                    <td className="px-3 text-right text-sm font-mono">{d.askingMultiple ? `${d.askingMultiple}x` : "—"}</td>
+                    <td className="px-4 text-right">
+                      <span className={`text-xs font-semibold ${d.dealScore >= 70 ? "text-emerald-600" : d.dealScore >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                        {d.dealScore}
+                      </span>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                No pipeline data
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </tbody>
+            </table>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Due Today</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary.todayReminders && summary.todayReminders.length > 0 ? (
-              <div className="space-y-3">
-                {summary.todayReminders.map(reminder => (
-                  <div key={reminder.id} className="flex flex-col p-3 rounded-md border bg-card hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{reminder.title}</span>
-                      <span className="text-xs text-muted-foreground">{formatDateShort(reminder.dueDate)}</span>
-                    </div>
-                    {reminder.linkedName && (
-                      <div className="mt-1">
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {reminder.linkedType}: {reminder.linkedName}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
+        {/* Overdue Follow-Ups */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Overdue Follow-Ups</span>
+            </div>
+            <Link href="/reminders" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          {!summary.overdueFollowUpsList || (summary.overdueFollowUpsList as any[]).length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground text-center">No overdue follow-ups.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 text-left">Deal</th>
+                  <th className="px-3 text-left">Next Action</th>
+                  <th className="px-4 text-right">Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary.overdueFollowUpsList as any[]).map((d) => (
+                  <tr key={d.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4">
+                      <Link href={`/deals/${d.id}`}>
+                        <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer">{d.dealName}</div>
+                        <div className="text-xs text-muted-foreground">{[d.city, d.state].filter(Boolean).join(", ")}</div>
+                      </Link>
+                    </td>
+                    <td className="px-3 text-xs text-muted-foreground max-w-[140px]">
+                      <span className="truncate block">{d.nextAction || "—"}</span>
+                    </td>
+                    <td className="px-4 text-right text-xs text-red-600 font-medium whitespace-nowrap">{d.nextActionDueDate || "—"}</td>
+                  </tr>
                 ))}
-              </div>
-            ) : (
-              <div className="py-12 text-center text-muted-foreground text-sm">
-                No reminders due today.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </tbody>
+            </table>
+          )}
+        </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Hot Deals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Deal</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Asking</TableHead>
-                  <TableHead>Multiple</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {summary.hotDealsList && summary.hotDealsList.length > 0 ? (
-                  summary.hotDealsList.map(deal => (
-                    <TableRow key={deal.id}>
-                      <TableCell className="font-medium">
-                        <Link href={`/deals/${deal.id}`} className="text-primary hover:underline">
-                          {deal.dealName}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{deal.city || "-"}</TableCell>
-                      <TableCell>{formatCurrency(deal.askingPrice)}</TableCell>
-                      <TableCell>{formatMultiple(deal.askingMultiple)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-normal">{deal.status}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">No hot deals.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        {/* Recently Added */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Recently Added</span>
+            </div>
+            <Link href="/deals" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          {!summary.recentlyAddedDeals || (summary.recentlyAddedDeals as any[]).length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground text-center">No deals yet.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 text-left">Deal</th>
+                  <th className="px-3 text-left">Status</th>
+                  <th className="px-4 text-right">Asking</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary.recentlyAddedDeals as any[]).map((d) => (
+                  <tr key={d.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4">
+                      <Link href={`/deals/${d.id}`}>
+                        <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer">{d.dealName}</div>
+                        <div className="text-xs text-muted-foreground">{[d.city, d.state].filter(Boolean).join(", ")}</div>
+                      </Link>
+                    </td>
+                    <td className="px-3"><StatusBadge status={d.status} /></td>
+                    <td className="px-4 text-right text-sm">{formatCurrency(d.askingPrice)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Overdue Follow-ups</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Deal</TableHead>
-                  <TableHead>Next Action</TableHead>
-                  <TableHead className="text-right">Due Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {summary.overdueDealsList && summary.overdueDealsList.length > 0 ? (
-                  summary.overdueDealsList.map(deal => (
-                    <TableRow key={deal.id}>
-                      <TableCell className="font-medium">
-                        <Link href={`/deals/${deal.id}`} className="text-primary hover:underline">
-                          {deal.dealName}
+        {/* Top Brokers */}
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-purple-500" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Top Brokers</span>
+            </div>
+            <Link href="/brokers" className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          {!summary.topBrokers || (summary.topBrokers as any[]).length === 0 ? (
+            <div className="px-4 py-6 text-sm text-muted-foreground text-center">No brokers yet.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="px-4 text-left">Broker</th>
+                  <th className="px-3 text-left">Relationship</th>
+                  <th className="px-3 text-right">Deals</th>
+                  <th className="px-4 text-right">Follow-Up</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(summary.topBrokers as any[]).map((b) => {
+                  const relColor =
+                    b.relationshipStrength === "Strong" ? "text-emerald-600" :
+                    b.relationshipStrength === "Warm" ? "text-amber-600" :
+                    "text-muted-foreground";
+                  return (
+                    <tr key={b.id} className="hover:bg-muted/40 transition-colors">
+                      <td className="px-4">
+                        <Link href={`/brokers/${b.id}`}>
+                          <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer">{b.name}</div>
+                          <div className="text-xs text-muted-foreground">{b.company}</div>
                         </Link>
-                      </TableCell>
-                      <TableCell className="text-sm truncate max-w-[200px]">
-                        {deal.nextAction}
-                      </TableCell>
-                      <TableCell className="text-right text-red-500 text-sm font-medium">
-                        {formatDateShort(deal.nextActionDueDate)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">No overdue follow-ups.</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      </td>
+                      <td className="px-3">
+                        <span className={`text-xs font-medium ${relColor}`}>{b.relationshipStrength}</span>
+                      </td>
+                      <td className="px-3 text-right text-sm">{b.dealCount}</td>
+                      <td className="px-4 text-right text-xs text-muted-foreground">{b.nextFollowUpDate || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );
-}
-
-function MetricCard({ title, value, icon: Icon, className = "", link }: { title: string; value: number | string; icon: any; className?: string; link?: string }) {
-  const content = (
-    <Card className={`transition-colors border ${className}`}>
-      <CardContent className="p-5 flex flex-col items-start justify-center space-y-3">
-        <div className="flex items-center justify-between w-full">
-          <div className="text-sm font-medium opacity-80">{title}</div>
-          <Icon className="w-5 h-5 opacity-70" />
-        </div>
-        <div className="text-2xl font-bold">{value}</div>
-      </CardContent>
-    </Card>
-  );
-
-  if (link) {
-    return (
-      <Link href={link}>
-        <div className="block cursor-pointer hover:opacity-80 transition-opacity">
-          {content}
-        </div>
-      </Link>
-    );
-  }
-
-  return content;
 }

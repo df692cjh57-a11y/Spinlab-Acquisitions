@@ -55,3 +55,14 @@ export function isDueToday(dateString: string | null | undefined): boolean {
   today.setHours(0, 0, 0, 0);
   return date.getTime() === today.getTime();
 }
+
+export function isDueThisWeek(dateString: string | null | undefined): boolean {
+  if (!dateString) return false;
+  const date = new Date(dateString);
+  date.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  return date >= today && date <= nextWeek;
+}

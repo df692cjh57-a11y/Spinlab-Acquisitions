@@ -1,0 +1,625 @@
+Now polish the entire app visually and functionally.
+
+Make the design feel like a Tesla-inspired acquisitions dashboard:
+
+- Ultra clean
+- Minimal
+- Premium
+- Fast
+- Spacious
+- Modern
+- Mostly white, black, gray, and subtle accent colors
+- No clutter
+- No childish colors
+- No cartoon icons
+- Sharp typography
+- Rounded cards
+- Smooth hover states
+- Clean table design
+- High-end SaaS feel
+
+The app should feel like:
+Tesla dashboard + Linear.app + modern private equity acquisitions CRM.
+
+App name:
+Spinlab Deal Desk
+
+--------------------------------
+VISUAL DESIGN DIRECTION
+--------------------------------
+
+Use a minimalist Tesla-like design system.
+
+Colors:
+- Background: very light gray or white
+- Cards: white
+- Text: near black
+- Secondary text: gray
+- Borders: soft gray
+- Accent color: electric blue or subtle red
+- Warning: muted amber
+- Danger: clean red
+- Success: clean green
+
+Avoid:
+- Loud gradients
+- Heavy shadows
+- Colorful clutter
+- Big cartoon icons
+- Cheap-looking buttons
+- Overcrowded tables
+
+Use:
+- Thin borders
+- Subtle shadows
+- Clean spacing
+- Modern fonts
+- Soft rounded corners
+- Consistent padding
+- Elegant badges
+- Sticky headers where useful
+
+--------------------------------
+GLOBAL LAYOUT
+--------------------------------
+
+Create a polished app shell:
+
+- Left sidebar navigation
+- Top header
+- Main content area
+- Mobile responsive layout
+
+Sidebar should include:
+
+- Dashboard
+- Deals
+- Brokers
+- Reminders
+- Settings
+
+Sidebar style:
+- Minimal
+- Black/white/gray
+- Active page highlighted clearly
+- Small clean icons
+- App name at the top: Spinlab Deal Desk
+
+Top header should show:
+- Current page title
+- Search bar
+- Quick add button
+- Today’s reminders count
+- Overdue count
+
+--------------------------------
+DASHBOARD POLISH
+--------------------------------
+
+Make the Dashboard look like an executive command center.
+
+Top metric cards:
+
+- Active Deals
+- Hot Deals
+- Stalled Deals
+- Overdue Follow-Ups
+- Average Asking Multiple
+- Total Pipeline Value
+- Brokers to Contact
+- LOIs Sent
+
+Metric cards should be clean and compact.
+
+Each card should show:
+- Metric name
+- Number
+- Small secondary context line
+- Optional subtle badge
+
+Below the cards, add four clean sections:
+
+1. Hot Deals
+2. Overdue Follow-Ups
+3. Recently Added Deals
+4. Top Brokers
+
+Use clean mini tables, not giant blocks.
+
+--------------------------------
+DEALS PAGE POLISH
+--------------------------------
+
+Make the Deals page the core screen.
+
+At the top:
+
+- Page title: Deals
+- Subtitle: Track laundromat and real estate acquisition opportunities
+- Add Deal button
+- Search bar
+- Filter button
+- View toggle: Table / Pipeline
+
+Table view should be very clean.
+
+Columns:
+
+- Deal
+- Location
+- Asking Price
+- Gross Revenue
+- Adjusted NOI/SDE
+- Multiple
+- Rent %
+- Status
+- Priority
+- Broker
+- Next Action
+- Due Date
+- Score
+
+Make rows elegant:
+- Slight hover effect
+- Clean status badges
+- Red warning for overdue
+- Stalled deals should stand out subtly but clearly
+- Hot deals should have a premium-looking badge
+
+Status badges should be muted and professional.
+
+Priority badges:
+- Low = gray
+- Medium = blue-gray
+- High = amber
+- Hot = red or black badge
+
+Score display:
+- 80–100: Strong Target
+- 60–79: Worth Underwriting
+- 40–59: Maybe
+- 0–39: Weak
+
+Show score as:
+- Number
+- Small label
+- Optional thin progress bar
+
+--------------------------------
+PIPELINE VIEW
+--------------------------------
+
+Add a pipeline/Kanban view for Deals.
+
+Columns:
+
+- New Lead
+- Contacted Broker
+- Financials Requested
+- Financials Received
+- Underwriting
+- Site Visit
+- LOI Sent
+- Negotiation
+- Under Contract
+- Due Diligence
+- Dead / Follow Up Later
+
+Each deal card should show:
+
+- Deal name
+- City/state
+- Asking price
+- Multiple
+- Broker
+- Next action
+- Due date
+- Priority badge
+- Deal score
+
+Allow dragging deals between stages if possible. If drag and drop is too complex, use a status dropdown on each card.
+
+--------------------------------
+DEAL DETAIL PAGE POLISH
+--------------------------------
+
+Make the deal detail page feel like a professional investment memo.
+
+Top section:
+- Deal name
+- Address
+- Status badge
+- Priority badge
+- Deal score
+- Red flag score
+- Next action
+- Due date
+- Edit button
+
+Add tabs:
+
+1. Overview
+2. Financials
+3. Lease / Real Estate
+4. Operations
+5. Red Flags
+6. Documents
+7. Notes
+8. Reminders
+
+Overview tab should show:
+- Key metrics
+- Asking price
+- Gross revenue
+- Adjusted NOI/SDE
+- Asking multiple
+- Rent as % of gross
+- Lease years remaining
+- Machine age
+- Broker
+- Source
+- Last contacted
+- Next action
+
+Financials tab:
+- Asking price
+- Gross revenue
+- Net income
+- Adjusted net income
+- Payroll
+- Rent
+- Water
+- Gas
+- Electric
+- Insurance
+- Repairs
+- Supplies
+- Other expenses
+- Asking multiple
+- Your target multiple
+- Estimated max offer
+
+Add a simple max offer calculator:
+Max Offer = Adjusted Net Income x Target Multiple
+
+Let user input target multiple.
+
+Lease / Real Estate tab:
+- Monthly rent
+- Annual rent
+- Square feet
+- Rent per square foot
+- Rent as % of gross
+- Lease years remaining
+- Renewal options
+- Landlord notes
+- Real estate included yes/no
+
+Operations tab:
+- Washers
+- Dryers
+- Machine brand
+- Average machine age
+- Card or coin
+- Wash-and-fold
+- Pickup/delivery
+- Commercial accounts
+- Hours
+- Staff count
+- Owner-operated or absentee
+
+Red Flags tab:
+- Checklist
+- Red flag score
+- Risk label
+- Notes field for each red flag if possible
+
+Documents tab:
+- Due diligence checklist
+- Status dropdown for each document
+- Progress bar
+- Notes
+
+Notes tab:
+- Timeline layout
+- Add note button
+- Filter by note type
+
+Reminders tab:
+- Deal-specific reminders
+- Add reminder button
+- Complete reminder button
+
+--------------------------------
+BROKERS PAGE POLISH
+--------------------------------
+
+Make the Brokers page relationship-focused.
+
+Top:
+
+- Page title: Brokers
+- Subtitle: Track broker relationships and deal sources
+- Add Broker button
+- Search bar
+- Filters
+
+Broker table columns:
+
+- Broker
+- Company
+- Market
+- Specialty
+- Relationship
+- Deals Sent
+- Hot Deals
+- Last Contact
+- Next Follow-Up
+- Score
+
+Broker detail page should have tabs:
+
+1. Overview
+2. Linked Deals
+3. Notes
+4. Reminders
+
+Overview should show:
+- Contact info
+- Market
+- Specialty
+- Broker type
+- Relationship strength
+- Trust rating
+- Responsiveness rating
+- Deal quality rating
+- Broker score
+- Last contact
+- Next follow-up
+
+Linked Deals tab:
+- All deals connected to this broker
+- Deal status
+- Asking price
+- Score
+- Next action
+
+--------------------------------
+REMINDERS PAGE POLISH
+--------------------------------
+
+Make Reminders feel like a command center for follow-up.
+
+Group reminders by:
+
+- Overdue
+- Today
+- This Week
+- Future
+- Completed
+
+Each reminder card/row should show:
+- Title
+- Linked deal or broker
+- Due date
+- Priority
+- Type
+- Complete button
+
+Overdue reminders should be visually clear but not ugly.
+
+Add quick filters:
+- All
+- Deals
+- Brokers
+- High Priority
+- Overdue
+- Completed
+
+--------------------------------
+SMART WARNINGS
+--------------------------------
+
+Add smart warning banners where relevant.
+
+For deals:
+
+Show warning if:
+- No next action
+- Next action is overdue
+- Asking multiple is above 5.0x
+- Rent is above 20% of gross
+- Lease has less than 5 years remaining
+- Machine age is above 12 years
+- Red flag score is 6 or higher
+
+Examples:
+
+“Warning: Rent is 22.4% of gross revenue. This may pressure deal economics.”
+
+“Stalled: This deal has no next action.”
+
+“High Risk: 8 red flags checked.”
+
+Keep warnings clean and professional.
+
+--------------------------------
+ACQUISITION-SPECIFIC LANGUAGE
+--------------------------------
+
+Use acquisition language throughout the app.
+
+Use:
+- Pipeline
+- Underwriting
+- LOI
+- Due diligence
+- Seller financing
+- Adjusted SDE
+- Asking multiple
+- Max offer
+- Red flags
+- Follow-up discipline
+- Broker source
+
+Avoid generic CRM language where possible.
+
+--------------------------------
+MICROCOPY
+--------------------------------
+
+Add small helpful labels and descriptions.
+
+Examples:
+
+Under Adjusted Net Income:
+“Use your normalized number, not seller’s claimed net.”
+
+Under Asking Multiple:
+“Asking price divided by adjusted net income.”
+
+Under Rent as % of Gross:
+“Annual rent divided by gross revenue.”
+
+Under Red Flag Score:
+“Higher score means more acquisition risk.”
+
+Under Next Action:
+“Every active deal should have a next step.”
+
+--------------------------------
+FORMS POLISH
+--------------------------------
+
+Make add/edit forms clean.
+
+Use sections instead of one giant form.
+
+Deal form sections:
+
+1. Basic Info
+2. Financials
+3. Lease
+4. Operations
+5. Pipeline
+6. Notes
+
+Broker form sections:
+
+1. Contact Info
+2. Market / Specialty
+3. Relationship
+4. Follow-Up
+5. Notes
+
+Use:
+- Required field indicators
+- Proper input formatting
+- Currency fields
+- Percentage fields
+- Date pickers
+- Dropdowns
+- Toggles
+- Textareas
+
+--------------------------------
+FUNCTIONAL FIXES
+--------------------------------
+
+Make sure:
+
+- All data persists after refresh
+- CRUD works for deals
+- CRUD works for brokers
+- CRUD works for reminders
+- Notes save correctly
+- Deals link to brokers
+- Brokers show linked deals
+- Calculations update automatically
+- Dashboard metrics update automatically
+- Filters work
+- Search works
+- Forms validate numbers and emails
+- Stalled logic works
+- Overdue logic works
+
+--------------------------------
+SEED DATA
+--------------------------------
+
+Improve the seed data so the app looks realistic.
+
+Use realistic laundromat examples:
+
+1. Brooklyn Coin Laundry
+- Brooklyn, NY
+- Asking: $950,000
+- Gross: $450,000
+- Adjusted SDE: $145,000
+- Rent: $10,000/month
+- 3,000 sq ft
+- 52 washers
+- 55 dryers
+- 16-year-old machines
+- Status: Underwriting
+- Priority: High
+
+2. Queens Wash Center
+- Queens, NY
+- Asking: $625,000
+- Gross: $380,000
+- Adjusted SDE: $135,000
+- Rent: $6,500/month
+- 2,400 sq ft
+- 34 washers
+- 38 dryers
+- 8-year-old machines
+- Status: Financials Received
+- Priority: Hot
+
+3. Jersey City Laundromat
+- Jersey City, NJ
+- Asking: $725,000
+- Gross: $520,000
+- Adjusted SDE: $175,000
+- Rent: $8,200/month
+- 2,800 sq ft
+- 40 washers
+- 44 dryers
+- 10-year-old machines
+- Status: Contacted Broker
+- Priority: Medium
+
+Add realistic brokers:
+
+1. Michael Stein
+- Metro Business Brokers
+- Laundromat specialist
+- NYC / NJ
+- Relationship: Warm
+
+2. David Klein
+- Empire Commercial Realty
+- CRE broker
+- Brooklyn / Queens
+- Relationship: Cold
+
+3. Rachel Cohen
+- Garden State Business Sales
+- Business broker
+- NJ
+- Relationship: Strong
+
+Add realistic reminders and notes.
+
+--------------------------------
+FINAL RESULT
+--------------------------------
+
+The app should feel premium, clean, and serious.
+
+It should not feel like a generic student project.
+
+It should feel like the internal acquisitions dashboard of a sharp laundromat roll-up company.
+
+Keep the existing features, but redesign and polish the whole user experience.

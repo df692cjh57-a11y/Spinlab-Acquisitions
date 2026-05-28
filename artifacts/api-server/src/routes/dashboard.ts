@@ -6,11 +6,47 @@ import {
   remindersTable,
   redFlagsTable,
 } from "@workspace/db";
-import { eq, lt, lte, and, isNotNull, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
 const today = () => new Date().toISOString().split("T")[0];
+
+function calcAskingMultiple(askingPrice: string | null, adjustedNetIncome: string | null): number | null {
+  const p = parseFloat(askingPrice ?? "");
+  const n = parseFloat(adjustedNetIncome ?? "");
+  if (!p || !n) return null;
+  return Math.round((p / n) * 100) / 100;
+}
+
+function calcDealScore(deal: typeof dealsTable.$inferSelect, redFlagScore: number): number {
+  let score = 50;
+  score -= redFlagScore * 3;
+  const multiple = calcAskingMultiple(deal.askingPrice, deal.adjustedNetIncome);
+  if (multiple !== null) {
+    if (multiple < 2.5) score += 10;
+    else if (multiple < 3.5) score += 5;
+    else if (multiple > 5) score -= 10;
+  }
+  const annualRent = deal.monthlyRent ? parseFloat(deal.monthlyRent) * 12 : null;
+  const g = parseFloat(deal.grossRevenue ?? "");
+  if (annualRent && g) {
+    const rentPct = (annualRent / g) * 100;
+    if (rentPct < 15) score += 10;
+    else if (rentPct < 20) score += 5;
+    else if (rentPct > 25) score -= 10;
+  }
+  const leaseYears = deal.leaseYearsRemaining ? parseFloat(deal.leaseYearsRemaining) : null;
+  if (leaseYears !== null) {
+    if (leaseYears >= 10) score += 10;
+    else if (leaseYears >= 5) score += 5;
+    else score -= 10;
+  }
+  if (deal.washAndFold) score += 3;
+  if (deal.pickupDelivery) score += 3;
+  if (deal.commercialAccounts) score += 3;
+  return Math.max(0, Math.min(100, score));
+}
 
 // GET /dashboard/summary
 router.get("/dashboard/summary", async (req, res) => {
@@ -44,15 +80,10 @@ router.get("/dashboard/summary", async (req, res) => {
     const deadDeals = deals.filter((d) => d.status === "Dead Deal").length;
     const stalledDeals = deals.filter((d) => d.status === "Stalled").length;
 
-    const askingPrices = deals
+    const totalPipelineValue = activeDeals
       .filter((d) => d.askingPrice)
-      .map((d) => parseFloat(d.askingPrice!));
-    const avgAskingPrice =
-      askingPrices.length > 0
-        ? askingPrices.reduce((a, b) => a + b, 0) / askingPrices.length
-        : null;
+      .reduce((sum, d) => sum + parseFloat(d.askingPrice!), 0);
 
-    // Calculate avg asking multiple
     const multiples: number[] = [];
     for (const deal of deals) {
       if (deal.askingPrice && deal.adjustedNetIncome) {
@@ -63,38 +94,80 @@ router.get("/dashboard/summary", async (req, res) => {
     }
     const avgAskingMultiple =
       multiples.length > 0
-        ? multiples.reduce((a, b) => a + b, 0) / multiples.length
+        ? Math.round((multiples.reduce((a, b) => a + b, 0) / multiples.length) * 100) / 100
         : null;
 
-    // Recent deals (last 5)
-    const recentDeals = deals
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, 5)
-      .map((d) => ({
-        ...d,
+    // Build a redFlagScore map per dealId
+    const flagsByDeal: Record<number, number> = {};
+    for (const f of redFlags) {
+      if (f.checked) {
+        flagsByDeal[f.dealId] = (flagsByDeal[f.dealId] ?? 0) + 1;
+      }
+    }
+
+    // Broker name map
+    const brokerMap: Record<number, string> = {};
+    for (const b of brokers) {
+      brokerMap[b.id] = b.name;
+    }
+
+    function enrichLite(d: typeof dealsTable.$inferSelect) {
+      const rfScore = flagsByDeal[d.id] ?? 0;
+      return {
+        id: d.id,
+        dealName: d.dealName,
+        city: d.city,
+        state: d.state,
+        status: d.status,
+        priority: d.priority,
         askingPrice: d.askingPrice ? parseFloat(d.askingPrice) : null,
-        grossRevenue: d.grossRevenue ? parseFloat(d.grossRevenue) : null,
-        netIncome: d.netIncome ? parseFloat(d.netIncome) : null,
         adjustedNetIncome: d.adjustedNetIncome ? parseFloat(d.adjustedNetIncome) : null,
-        monthlyRent: d.monthlyRent ? parseFloat(d.monthlyRent) : null,
-        annualRent: d.monthlyRent ? parseFloat(d.monthlyRent) * 12 : null,
-        leaseYearsRemaining: d.leaseYearsRemaining ? parseFloat(d.leaseYearsRemaining) : null,
-        squareFootage: d.squareFootage ? parseFloat(d.squareFootage) : null,
-        avgMachineAge: d.avgMachineAge ? parseFloat(d.avgMachineAge) : null,
-        brokerName: null,
-        askingMultiple: null,
-        rentAsPercentGross: null,
-        rentPerSqFt: null,
-        redFlagScore: 0,
-        redFlagLevel: "Clean",
-        dealScore: 50,
-        dealQuality: "Maybe",
-        createdAt: d.createdAt.toISOString(),
-        updatedAt: d.updatedAt.toISOString(),
-      }));
+        askingMultiple: calcAskingMultiple(d.askingPrice, d.adjustedNetIncome),
+        dealScore: calcDealScore(d, rfScore),
+        brokerName: d.brokerId ? (brokerMap[d.brokerId] ?? null) : null,
+        nextAction: d.nextAction,
+        nextActionDueDate: d.nextActionDueDate,
+      };
+    }
+
+    // Hot deals list (top 5)
+    const hotDealsList = deals
+      .filter((d) => d.priority === "Hot" && !["Dead Deal", "Closed"].includes(d.status))
+      .slice(0, 5)
+      .map(enrichLite);
+
+    // Overdue follow-ups: deals with a past due nextActionDueDate
+    const overdueFollowUpsList = deals
+      .filter((d) => d.nextActionDueDate && d.nextActionDueDate < t && !["Dead Deal", "Closed"].includes(d.status))
+      .slice(0, 5)
+      .map(enrichLite);
+
+    // Recently added (last 5)
+    const recentlyAddedDeals = [...deals]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+      .map(enrichLite);
+
+    // Top brokers by deal count
+    const brokerDealCounts: Record<number, number> = {};
+    for (const d of deals) {
+      if (d.brokerId) {
+        brokerDealCounts[d.brokerId] = (brokerDealCounts[d.brokerId] ?? 0) + 1;
+      }
+    }
+    const topBrokers = brokers
+      .map((b) => ({
+        id: b.id,
+        name: b.name,
+        company: b.company,
+        market: b.market,
+        relationshipStrength: b.relationshipStrength,
+        dealCount: brokerDealCounts[b.id] ?? 0,
+        lastContactedDate: b.lastContactedDate,
+        nextFollowUpDate: b.nextFollowUpDate,
+      }))
+      .sort((a, b) => b.dealCount - a.dealCount)
+      .slice(0, 5);
 
     // Today's reminders
     const todayReminders = reminders
@@ -116,12 +189,13 @@ router.get("/dashboard/summary", async (req, res) => {
       dealsInUnderwriting,
       loisSent,
       deadDeals,
-      avgAskingPrice: avgAskingPrice ? Math.round(avgAskingPrice) : null,
-      avgAskingMultiple: avgAskingMultiple
-        ? Math.round(avgAskingMultiple * 100) / 100
-        : null,
       stalledDeals,
-      recentDeals,
+      totalPipelineValue: totalPipelineValue > 0 ? totalPipelineValue : null,
+      avgAskingMultiple,
+      hotDealsList,
+      overdueFollowUpsList,
+      recentlyAddedDeals,
+      topBrokers,
       todayReminders,
     });
   } catch (err) {

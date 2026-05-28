@@ -1,38 +1,32 @@
-import { useListDeals, useCreateDeal, getListDealsQueryKey, useListBrokers } from "@workspace/api-client-react";
+import {
+  useListDeals, useCreateDeal, useUpdateDeal,
+  getListDealsQueryKey, useListBrokers
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "wouter";
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency, formatDateShort, formatMultiple, formatPercent, isOverdue } from "@/lib/format";
-import { Search, Plus, Filter, ArrowRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Toggle } from "@/components/ui/toggle";
+import { Search, Plus, LayoutList, Columns, ChevronRight, X } from "lucide-react";
+import { formatCurrency, formatMultiple, isOverdue } from "@/lib/format";
 
-function getPriorityColor(priority: string) {
-  switch (priority) {
-    case "Hot": return "bg-orange-100 text-orange-700 border-orange-200";
-    case "High": return "bg-yellow-100 text-yellow-700 border-yellow-200";
-    case "Medium": return "bg-blue-100 text-blue-700 border-blue-200";
-    default: return "bg-gray-100 text-gray-700 border-gray-200";
-  }
-}
+const ALL_STATUSES = [
+  "New Lead","Contacted Broker","NDA Sent","Financials Requested","Financials Received",
+  "Underwriting","Site Visit Scheduled","LOI Sent","Negotiation","Under Contract",
+  "Due Diligence","Financing","Closed","Dead Deal","Follow Up Later","Stalled",
+];
 
-function getStatusColor(status: string) {
-  if (["Closed"].includes(status)) return "bg-green-100 text-green-700 border-green-200";
-  if (["Dead Deal", "Stalled"].includes(status)) return "bg-red-100 text-red-700 border-red-200";
-  if (["Under Contract", "Due Diligence", "Financing"].includes(status)) return "bg-purple-100 text-purple-700 border-purple-200";
-  return "bg-blue-50 text-blue-700 border-blue-200";
-}
+const PIPELINE_STAGES = [
+  "New Lead","Contacted Broker","Financials Requested","Financials Received",
+  "Underwriting","Site Visit Scheduled","LOI Sent","Negotiation",
+  "Under Contract","Due Diligence",
+];
 
 const createDealSchema = z.object({
   dealName: z.string().min(1, "Deal name is required"),
@@ -49,14 +43,126 @@ const createDealSchema = z.object({
   nextAction: z.string().optional(),
   nextActionDueDate: z.string().optional(),
   brokerId: z.coerce.number().optional(),
-  notes: z.string().optional(),
 });
 
-const ALL_STATUSES = [
-  "New Lead", "Contacted Broker", "NDA Sent", "Financials Requested", "Financials Received",
-  "Underwriting", "Site Visit Scheduled", "LOI Sent", "Negotiation", "Under Contract",
-  "Due Diligence", "Financing", "Closed", "Dead Deal", "Follow Up Later", "Stalled"
-];
+function StatusBadge({ status }: { status: string }) {
+  const closed = status === "Closed";
+  const dead = ["Dead Deal","Stalled"].includes(status);
+  const active = ["Under Contract","Due Diligence","Financing","LOI Sent","Negotiation"].includes(status);
+  const cls = closed ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : dead ? "bg-red-50 text-red-600 border-red-200"
+    : active ? "bg-purple-50 text-purple-700 border-purple-200"
+    : "bg-blue-50 text-blue-700 border-blue-200";
+  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`}>{status}</span>;
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const cls =
+    priority === "Hot" ? "bg-rose-50 text-rose-700 border-rose-200" :
+    priority === "High" ? "bg-amber-50 text-amber-700 border-amber-200" :
+    priority === "Medium" ? "bg-blue-50 text-blue-700 border-blue-100" :
+    "bg-gray-50 text-gray-500 border-gray-200";
+  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${cls}`}>{priority}</span>;
+}
+
+function ScoreBadge({ score, quality }: { score?: number | null; quality?: string | null }) {
+  if (score == null) return <span className="text-muted-foreground text-xs">—</span>;
+  const cls = score >= 70 ? "text-emerald-600" : score >= 50 ? "text-amber-600" : "text-red-600";
+  return (
+    <div className="flex flex-col items-end">
+      <span className={`text-sm font-bold ${cls}`}>{score}</span>
+      <span className="text-[9px] text-muted-foreground leading-tight">{quality}</span>
+    </div>
+  );
+}
+
+function MultipleCell({ value }: { value?: number | null }) {
+  if (!value) return <span className="text-muted-foreground text-xs">—</span>;
+  const cls = value > 5 ? "text-red-600 font-semibold" : value < 3.5 ? "text-emerald-600 font-semibold" : "text-foreground";
+  return <span className={`text-sm font-mono ${cls}`}>{value.toFixed(2)}x</span>;
+}
+
+type Deal = {
+  id: number;
+  dealName: string;
+  city?: string | null;
+  state?: string | null;
+  status: string;
+  priority: string;
+  askingPrice?: number | null;
+  grossRevenue?: number | null;
+  adjustedNetIncome?: number | null;
+  askingMultiple?: number | null;
+  rentAsPercentGross?: number | null;
+  dealScore?: number | null;
+  dealQuality?: string | null;
+  brokerName?: string | null;
+  nextAction?: string | null;
+  nextActionDueDate?: string | null;
+};
+
+function PipelineView({ deals, onStatusChange }: { deals: Deal[]; onStatusChange: (id: number, status: string) => void }) {
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-3 min-w-max">
+        {PIPELINE_STAGES.map((stage) => {
+          const stageDeals = deals.filter((d) => d.status === stage);
+          return (
+            <div key={stage} className="w-56 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{stage}</span>
+                <span className="text-[10px] text-muted-foreground bg-muted px-1.5 rounded-full">{stageDeals.length}</span>
+              </div>
+              <div className="space-y-2">
+                {stageDeals.map((d) => (
+                  <Link key={d.id} href={`/deals/${d.id}`}>
+                    <div className="bg-card border border-border rounded-lg p-3 hover:border-primary/30 transition-colors cursor-pointer group">
+                      <div className="font-medium text-sm text-foreground group-hover:text-primary leading-tight mb-1">{d.dealName}</div>
+                      <div className="text-xs text-muted-foreground mb-2">{[d.city, d.state].filter(Boolean).join(", ")}</div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">{formatCurrency(d.askingPrice)}</span>
+                        {d.askingMultiple && <span className="text-xs font-mono text-muted-foreground">{d.askingMultiple.toFixed(2)}x</span>}
+                      </div>
+                      {d.brokerName && <div className="text-[10px] text-muted-foreground mt-1 truncate">{d.brokerName}</div>}
+                      <div className="flex items-center justify-between mt-2">
+                        <PriorityBadge priority={d.priority} />
+                        {d.dealScore != null && (
+                          <span className={`text-xs font-bold ${d.dealScore >= 70 ? "text-emerald-600" : d.dealScore >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                            {d.dealScore}
+                          </span>
+                        )}
+                      </div>
+                      {d.nextAction && (
+                        <div className="mt-2 text-[10px] text-muted-foreground truncate border-t border-border pt-1.5">
+                          {d.nextAction}
+                        </div>
+                      )}
+                      <div className="mt-1.5" onClick={(e) => e.preventDefault()}>
+                        <Select value={d.status} onValueChange={(v) => onStatusChange(d.id, v)}>
+                          <SelectTrigger className="h-6 text-[10px] border-border/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ALL_STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+                {stageDeals.length === 0 && (
+                  <div className="border-2 border-dashed border-border rounded-lg p-4 text-center text-[10px] text-muted-foreground">
+                    No deals
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function DealsPage() {
   const [search, setSearch] = useState("");
@@ -64,250 +170,119 @@ export default function DealsPage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("All");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [hotOnly, setHotOnly] = useState(false);
-  const [deadOnly, setDeadOnly] = useState(false);
-  
-  const { data: deals, isLoading } = useListDeals({ 
+  const [view, setView] = useState<"table" | "pipeline">("table");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const { data: deals, isLoading } = useListDeals({
     search,
     ...(statusFilter !== "All" && { status: statusFilter }),
     ...(priorityFilter !== "All" && { priority: priorityFilter }),
     ...(overdueOnly && { overdueOnly: true }),
     ...(hotOnly && { priority: "Hot" }),
-    ...(deadOnly && { status: "Dead Deal" }),
   });
-  
+
   const { data: brokers } = useListBrokers({});
-  
   const queryClient = useQueryClient();
   const createDeal = useCreateDeal();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const updateDeal = useUpdateDeal();
 
   const form = useForm<z.infer<typeof createDealSchema>>({
     resolver: zodResolver(createDealSchema),
-    defaultValues: {
-      dealName: "",
-      businessName: "",
-      city: "",
-      state: "",
-      assetType: "Laundromat",
-      status: "New Lead",
-      priority: "Medium",
-      nextAction: "",
-      nextActionDueDate: "",
-      notes: ""
-    }
+    defaultValues: { dealName: "", businessName: "", city: "", state: "", assetType: "Laundromat", status: "New Lead", priority: "Medium", nextAction: "" },
   });
 
   const onSubmit = (values: z.infer<typeof createDealSchema>) => {
     createDeal.mutate({ data: values as any }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
-        setIsDialogOpen(false);
-        form.reset();
-      }
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() }); setIsOpen(false); form.reset(); },
     });
   };
 
-  const hasActiveFilters = statusFilter !== "All" || priorityFilter !== "All" || overdueOnly || hotOnly || deadOnly;
+  const handleStatusChange = (id: number, status: string) => {
+    updateDeal.mutate({ id, data: { status } as any }, {
+      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() }); },
+    });
+  };
+
+  const hasFilters = statusFilter !== "All" || priorityFilter !== "All" || overdueOnly || hotOnly || search;
 
   return (
-    <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="p-8 max-w-[1600px] mx-auto space-y-6">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Deals</h1>
-          <p className="text-muted-foreground mt-1">Manage and track your active acquisitions.</p>
+          <h1 className="text-xl font-bold tracking-tight">Deals</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Track laundromat and real estate acquisition opportunities</p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-new-deal"><Plus className="w-4 h-4 mr-2" /> New Deal</Button>
+            <Button size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Add Deal</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Deal</DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-xl">
+            <DialogHeader><DialogTitle>Add Deal</DialogTitle></DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="dealName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Deal Name *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Sunset Laundromat" {...field} />
-                      </FormControl>
-                      <FormMessage />
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField control={form.control} name="dealName" render={({ field }) => (
+                    <FormItem className="col-span-2"><FormLabel>Deal Name *</FormLabel><FormControl><Input placeholder="e.g. Brooklyn Coin Laundry" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="businessName" render={({ field }) => (
+                    <FormItem className="col-span-2"><FormLabel>Business Name</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="city" render={({ field }) => (
+                    <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="state" render={({ field }) => (
+                    <FormItem><FormLabel>State</FormLabel><FormControl><Input placeholder="NY" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="askingPrice" render={({ field }) => (
+                    <FormItem><FormLabel>Asking Price ($)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="grossRevenue" render={({ field }) => (
+                    <FormItem><FormLabel>Gross Revenue ($)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="adjustedNetIncome" render={({ field }) => (
+                    <FormItem><FormLabel>Adjusted SDE ($)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="monthlyRent" render={({ field }) => (
+                    <FormItem><FormLabel>Monthly Rent ($)</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="status" render={({ field }) => (
+                    <FormItem><FormLabel>Status *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                        <SelectContent>{ALL_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
                     </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="businessName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Legal Business Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Sunset Laundry LLC" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>City</FormLabel>
-                        <FormControl>
-                          <Input placeholder="City" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>State</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ST" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="askingPrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Asking Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="grossRevenue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Gross Revenue</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="adjustedNetIncome"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Adjusted Net Income</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="monthlyRent"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Monthly Rent</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="0" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {ALL_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Priority *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select priority" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Low">Low</SelectItem>
-                            <SelectItem value="Medium">Medium</SelectItem>
-                            <SelectItem value="High">High</SelectItem>
-                            <SelectItem value="Hot">Hot</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="brokerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Linked Broker</FormLabel>
-                      <Select onValueChange={(val) => field.onChange(parseInt(val))} defaultValue={field.value?.toString()}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select broker" />
-                          </SelectTrigger>
-                        </FormControl>
+                  )} />
+                  <FormField control={form.control} name="priority" render={({ field }) => (
+                    <FormItem><FormLabel>Priority *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {brokers?.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                          {["Hot","High","Medium","Low"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <FormMessage />
                     </FormItem>
-                  )}
-                />
-                
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={createDeal.isPending}>
-                    {createDeal.isPending ? "Creating..." : "Create Deal"}
-                  </Button>
+                  )} />
+                  <FormField control={form.control} name="brokerId" render={({ field }) => (
+                    <FormItem><FormLabel>Broker</FormLabel>
+                      <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value?.toString()}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select broker..." /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {brokers?.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="nextActionDueDate" render={({ field }) => (
+                    <FormItem><FormLabel>Next Action Due</FormLabel><FormControl><Input type="date" {...field} /></FormControl></FormItem>
+                  )} />
+                  <FormField control={form.control} name="nextAction" render={({ field }) => (
+                    <FormItem className="col-span-2"><FormLabel>Next Action</FormLabel><FormControl><Input placeholder="What needs to happen next?" {...field} /></FormControl></FormItem>
+                  )} />
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(false)}>Cancel</Button>
+                  <Button type="submit" size="sm" disabled={createDeal.isPending}>{createDeal.isPending ? "Adding..." : "Add Deal"}</Button>
                 </div>
               </form>
             </Form>
@@ -315,169 +290,133 @@ export default function DealsPage() {
         </Dialog>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-[300px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search deals..."
-            className="pl-9 bg-card"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input placeholder="Search deals..." className="pl-8 h-8 w-52 text-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px] bg-card">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-48 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Statuses</SelectItem>
-            {ALL_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            {ALL_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
-
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[140px] bg-card">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
+          <SelectTrigger className="h-8 w-36 text-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Priorities</SelectItem>
-            <SelectItem value="Low">Low</SelectItem>
-            <SelectItem value="Medium">Medium</SelectItem>
-            <SelectItem value="High">High</SelectItem>
-            <SelectItem value="Hot">Hot</SelectItem>
+            {["Hot","High","Medium","Low"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
           </SelectContent>
         </Select>
-
-        <div className="flex items-center gap-1 border rounded-md p-1 bg-card">
-          <Toggle size="sm" pressed={overdueOnly} onPressedChange={setOverdueOnly} className="h-8 data-[state=on]:bg-red-100 data-[state=on]:text-red-700">Overdue</Toggle>
-          <Toggle size="sm" pressed={hotOnly} onPressedChange={setHotOnly} className="h-8 data-[state=on]:bg-orange-100 data-[state=on]:text-orange-700">Hot</Toggle>
-          <Toggle size="sm" pressed={deadOnly} onPressedChange={setDeadOnly} className="h-8">Dead</Toggle>
-        </div>
-
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={() => {
-            setStatusFilter("All"); setPriorityFilter("All"); setOverdueOnly(false); setHotOnly(false); setDeadOnly(false);
-          }} className="text-muted-foreground">
-            <X className="w-4 h-4 mr-1" /> Clear
-          </Button>
+        <button
+          onClick={() => setOverdueOnly(!overdueOnly)}
+          className={`px-3 py-1 h-8 rounded border text-xs font-medium transition-colors ${overdueOnly ? "bg-red-600 text-white border-red-600" : "bg-card text-muted-foreground border-border hover:border-foreground/30"}`}
+        >
+          Overdue
+        </button>
+        <button
+          onClick={() => setHotOnly(!hotOnly)}
+          className={`px-3 py-1 h-8 rounded border text-xs font-medium transition-colors ${hotOnly ? "bg-rose-600 text-white border-rose-600" : "bg-card text-muted-foreground border-border hover:border-foreground/30"}`}
+        >
+          Hot
+        </button>
+        {hasFilters && (
+          <button
+            onClick={() => { setSearch(""); setStatusFilter("All"); setPriorityFilter("All"); setOverdueOnly(false); setHotOnly(false); }}
+            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <X className="w-3 h-3" /> Clear
+          </button>
         )}
+        <div className="ml-auto flex items-center gap-1 border border-border rounded overflow-hidden">
+          <button
+            onClick={() => setView("table")}
+            className={`px-2.5 py-1.5 text-xs transition-colors ${view === "table" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <LayoutList className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setView("pipeline")}
+            className={`px-2.5 py-1.5 text-xs transition-colors ${view === "pipeline" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <Columns className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <div className="border rounded-md bg-card shadow-sm overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead className="min-w-[200px]">Deal Name</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Asking Price</TableHead>
-              <TableHead>Gross Rev</TableHead>
-              <TableHead>Adj. Net</TableHead>
-              <TableHead>Multiple</TableHead>
-              <TableHead>Rent/Gross</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead className="min-w-[180px]">Next Action</TableHead>
-              <TableHead>Red Flags</TableHead>
-              <TableHead>Score</TableHead>
-              <TableHead className="text-right"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Loading deals...</TableCell>
-              </TableRow>
-            ) : deals?.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={13} className="text-center py-12 text-muted-foreground">No deals match your filters.</TableCell>
-              </TableRow>
-            ) : deals?.map((deal) => {
-              const multipleStr = formatMultiple(deal.askingMultiple);
-              const multipleColor = !deal.askingMultiple ? "" : deal.askingMultiple > 5 ? "text-red-600 font-medium" : deal.askingMultiple >= 4 ? "text-yellow-600 font-medium" : "text-green-600 font-medium";
-              
-              const rentPercent = deal.rentAsPercentGross;
-              const rentColor = !rentPercent ? "" : rentPercent > 20 ? "text-red-600 font-medium" : rentPercent >= 15 ? "text-yellow-600 font-medium" : "";
-
-              return (
-                <TableRow key={deal.id} className="hover:bg-muted/30 transition-colors group cursor-pointer">
-                  <TableCell className="font-medium">
-                    <Link href={`/deals/${deal.id}`} className="block">
-                      <div className="text-primary hover:underline">{deal.dealName}</div>
-                      {deal.brokerName && <div className="text-[11px] text-muted-foreground mt-0.5 font-normal">{deal.brokerName}</div>}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    <Link href={`/deals/${deal.id}`} className="block">{[deal.city, deal.state].filter(Boolean).join(", ") || "-"}</Link>
-                  </TableCell>
-                  <TableCell className="text-sm">{formatCurrency(deal.askingPrice)}</TableCell>
-                  <TableCell className="text-sm">{formatCurrency(deal.grossRevenue)}</TableCell>
-                  <TableCell className="text-sm">{formatCurrency(deal.adjustedNetIncome)}</TableCell>
-                  <TableCell className={`text-sm ${multipleColor}`}>{multipleStr}</TableCell>
-                  <TableCell className={`text-sm ${rentColor}`}>{formatPercent(rentPercent)}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`font-normal whitespace-nowrap ${getStatusColor(deal.status)}`}>
-                      {deal.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`font-normal ${getPriorityColor(deal.priority)}`}>
-                      {deal.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {deal.nextAction ? (
-                        <>
-                          <span className="block truncate max-w-[180px]">{deal.nextAction}</span>
-                          {deal.nextActionDueDate && (
-                            <span className={`text-[11px] ${isOverdue(deal.nextActionDueDate) ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
-                              {formatDateShort(deal.nextActionDueDate)}
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px] uppercase font-bold">Stalled</Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {deal.redFlagLevel && (
-                       <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
-                         deal.redFlagLevel === "Clean" ? "bg-green-50 text-green-700 border-green-200" :
-                         deal.redFlagLevel === "Caution" ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
-                         deal.redFlagLevel === "High Risk" ? "bg-orange-50 text-orange-700 border-orange-200" :
-                         "bg-red-50 text-red-700 border-red-200"
-                       }`}>
-                         {deal.redFlagLevel}
-                       </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {deal.dealScore ? (
-                       <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
-                         deal.dealScore >= 80 ? "bg-green-50 text-green-700 border-green-200" :
-                         deal.dealScore >= 60 ? "bg-blue-50 text-blue-700 border-blue-200" :
-                         deal.dealScore >= 40 ? "bg-yellow-50 text-yellow-700 border-yellow-200" :
-                         "bg-red-50 text-red-700 border-red-200"
-                       }`}>
-                         {deal.dealScore}
-                       </Badge>
-                    ) : "-"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/deals/${deal.id}`}>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+      {isLoading ? (
+        <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-11 bg-muted animate-pulse rounded" />)}</div>
+      ) : !deals || deals.length === 0 ? (
+        <div className="bg-card border border-border rounded-lg p-12 text-center text-sm text-muted-foreground">
+          No deals match your filters.{" "}<button onClick={() => setIsOpen(true)} className="text-primary hover:underline">Add one.</button>
+        </div>
+      ) : view === "pipeline" ? (
+        <PipelineView deals={deals as Deal[]} onStatusChange={handleStatusChange} />
+      ) : (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="border-b border-border bg-muted/30">
+              <tr>
+                <th className="px-4 text-left">Deal</th>
+                <th className="px-3 text-left">Location</th>
+                <th className="px-3 text-right">Asking</th>
+                <th className="px-3 text-right">Gross Rev</th>
+                <th className="px-3 text-right">Adj. SDE</th>
+                <th className="px-3 text-right">Multiple</th>
+                <th className="px-3 text-right">Rent %</th>
+                <th className="px-3 text-left">Status</th>
+                <th className="px-3 text-left">Priority</th>
+                <th className="px-3 text-left">Broker</th>
+                <th className="px-3 text-left">Next Action</th>
+                <th className="px-3 text-right">Due</th>
+                <th className="px-3 text-right">Score</th>
+                <th className="px-3 w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {(deals as Deal[]).map((d) => {
+                const overdue = isOverdue(d.nextActionDueDate);
+                return (
+                  <tr key={d.id} className="hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0">
+                    <td className="px-4">
+                      <Link href={`/deals/${d.id}`}>
+                        <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer leading-tight">{d.dealName}</div>
+                      </Link>
+                    </td>
+                    <td className="px-3 text-xs text-muted-foreground whitespace-nowrap">{[d.city, d.state].filter(Boolean).join(", ") || "—"}</td>
+                    <td className="px-3 text-right text-sm">{formatCurrency(d.askingPrice)}</td>
+                    <td className="px-3 text-right text-sm text-muted-foreground">{formatCurrency(d.grossRevenue)}</td>
+                    <td className="px-3 text-right text-sm">{formatCurrency(d.adjustedNetIncome)}</td>
+                    <td className="px-3 text-right"><MultipleCell value={d.askingMultiple} /></td>
+                    <td className="px-3 text-right text-xs text-muted-foreground">
+                      {d.rentAsPercentGross != null ? (
+                        <span className={d.rentAsPercentGross > 20 ? "text-red-600 font-medium" : ""}>{d.rentAsPercentGross.toFixed(1)}%</span>
+                      ) : "—"}
+                    </td>
+                    <td className="px-3"><StatusBadge status={d.status} /></td>
+                    <td className="px-3"><PriorityBadge priority={d.priority} /></td>
+                    <td className="px-3 text-xs text-muted-foreground">{d.brokerName || "—"}</td>
+                    <td className="px-3 text-xs text-muted-foreground max-w-[160px]">
+                      <span className="truncate block">{d.nextAction || <span className="text-red-500 italic">No next action</span>}</span>
+                    </td>
+                    <td className={`px-3 text-right text-xs whitespace-nowrap ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
+                      {d.nextActionDueDate || "—"}
+                    </td>
+                    <td className="px-3 text-right">
+                      <ScoreBadge score={d.dealScore} quality={d.dealQuality} />
+                    </td>
+                    <td className="px-3 text-center">
+                      <Link href={`/deals/${d.id}`}><ChevronRight className="w-3.5 h-3.5 text-muted-foreground" /></Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
