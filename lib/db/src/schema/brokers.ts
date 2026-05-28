@@ -30,6 +30,8 @@ export const brokersTable = pgTable("brokers", {
   tags: text("tags"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const insertBrokerSchema = createInsertSchema(brokersTable).omit({

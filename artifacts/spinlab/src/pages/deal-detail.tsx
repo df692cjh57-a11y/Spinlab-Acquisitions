@@ -1,4 +1,4 @@
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import {
   useGetDeal, useUpdateDeal, getGetDealQueryKey,
   useGetDealRedFlags, useUpdateDealRedFlags, getGetDealRedFlagsQueryKey,
@@ -19,9 +19,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, FileCheck,
-  CircleDashed, TrendingUp, DollarSign, Zap, AlertOctagon, Info
+  CircleDashed, TrendingUp, DollarSign, Zap, AlertOctagon, Info, MoreHorizontal, Archive, Trash2,
 } from "lucide-react";
+import { softDeleteDeal, archiveDeal } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1117,9 +1126,27 @@ export default function DealDetail() {
   const { id } = useParams();
   const dealId = parseInt(id || "0", 10);
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const { toast } = useToast();
   const { data: deal, isLoading } = useGetDeal(dealId, { query: { enabled: !!dealId, queryKey: getGetDealQueryKey(dealId) } });
   const { data: brokers } = useListBrokers({});
   const updateDeal = useUpdateDeal();
+
+  const handleDeleteDeal = async () => {
+    if (!deal) return;
+    await softDeleteDeal(deal.id);
+    toast({ title: "Deal deleted", description: `${deal.dealName} moved to Deleted Deals.` });
+    navigate("/deals");
+  };
+
+  const handleArchiveDeal = async () => {
+    if (!deal) return;
+    await archiveDeal(deal.id);
+    toast({ title: "Deal archived", description: `${deal.dealName} has been archived.` });
+    navigate("/deals");
+  };
 
   if (isLoading || !deal) {
     return (
@@ -1162,8 +1189,72 @@ export default function DealDetail() {
               DSCR {fin.dscr.toFixed(2)}x
             </span>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => setArchiveOpen(true)} className="gap-2">
+                <Archive className="w-3.5 h-3.5" />Archive deal
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setDeleteOpen(true)}
+                className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />Delete deal
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this deal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deal.dealName}</strong> will be moved to Deleted Deals. You can restore it later from Settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => setArchiveOpen(false) || (setDeleteOpen(false), handleArchiveDeal())}
+              className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
+            >
+              <Archive className="w-3.5 h-3.5 mr-1.5" />Archive instead
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleDeleteDeal}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete deal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Archive confirmation */}
+      <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this deal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deal.dealName}</strong> will be hidden from your active pipeline. You can restore it from Settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchiveDeal}>
+              Archive deal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Summary bar */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">

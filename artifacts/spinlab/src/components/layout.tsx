@@ -71,10 +71,14 @@ export function Sidebar() {
       </div>
 
       <div className="p-3 border-t border-sidebar-border">
-        <div className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-[4px] cursor-pointer transition-colors">
-          <Settings className="h-4 w-4" />
-          Settings
-        </div>
+        <Link href="/settings">
+          <div className={`flex items-center gap-2.5 px-3 py-1.5 text-sm rounded-[4px] cursor-pointer transition-colors ${
+            location === "/settings" ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          }`}>
+            <Settings className={`h-4 w-4 ${location === "/settings" ? "text-primary" : "text-muted-foreground"}`} />
+            Settings
+          </div>
+        </Link>
         <div className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground rounded-[4px] cursor-pointer transition-colors mt-0.5">
           <div className="w-5 h-5 rounded bg-muted-foreground/20 flex items-center justify-center text-[10px] font-bold text-foreground">JD</div>
           <span className="truncate">John Doe</span>

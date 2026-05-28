@@ -9,6 +9,7 @@ import DealDetail from "@/pages/deal-detail";
 import BrokersPage from "@/pages/brokers";
 import BrokerDetail from "@/pages/broker-detail";
 import RemindersPage from "@/pages/reminders";
+import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ function App() {
                 <Route path="/brokers" component={BrokersPage} />
                 <Route path="/brokers/:id" component={BrokerDetail} />
                 <Route path="/reminders" component={RemindersPage} />
+                <Route path="/settings" component={SettingsPage} />
                 <Route component={NotFound} />
               </Switch>
             </Layout>

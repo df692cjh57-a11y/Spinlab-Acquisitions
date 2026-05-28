@@ -120,6 +120,8 @@ export const dealsTable = pgTable("deals", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const insertDealSchema = createInsertSchema(dealsTable).omit({

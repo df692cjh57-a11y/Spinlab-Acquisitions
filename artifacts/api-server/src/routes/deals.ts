@@ -8,7 +8,7 @@ import {
   RED_FLAG_ITEMS,
   DOCUMENT_ITEMS,
 } from "@workspace/db";
-import { eq, and, lte, sql, desc } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, desc } from "drizzle-orm";
 import {
   ListDealsQueryParams,
   CreateDealBody,
@@ -33,16 +33,13 @@ function calcRentAsPercentGross(annualRent: number | null, grossRevenue: string 
 
 function calcDealScore(deal: typeof dealsTable.$inferSelect, redFlagScore: number): number {
   let score = 50;
-  // Red flag penalty
   score -= redFlagScore * 3;
-  // Asking multiple
   const multiple = calcAskingMultiple(deal.askingPrice, deal.adjustedNetIncome);
   if (multiple !== null) {
     if (multiple < 2.5) score += 10;
     else if (multiple < 3.5) score += 5;
     else if (multiple > 5) score -= 10;
   }
-  // Rent as % of gross
   const annualRent = deal.monthlyRent ? parseFloat(deal.monthlyRent) * 12 : null;
   const rentPct = calcRentAsPercentGross(annualRent, deal.grossRevenue);
   if (rentPct !== null) {
@@ -50,24 +47,20 @@ function calcDealScore(deal: typeof dealsTable.$inferSelect, redFlagScore: numbe
     else if (rentPct < 20) score += 5;
     else if (rentPct > 25) score -= 10;
   }
-  // Lease years
   const leaseYears = deal.leaseYearsRemaining ? parseFloat(deal.leaseYearsRemaining) : null;
   if (leaseYears !== null) {
     if (leaseYears >= 10) score += 10;
     else if (leaseYears >= 5) score += 5;
     else score -= 10;
   }
-  // Machine age
   const machineAge = deal.avgMachineAge ? parseFloat(deal.avgMachineAge) : null;
   if (machineAge !== null) {
     if (machineAge < 5) score += 5;
     else if (machineAge > 10) score -= 5;
   }
-  // Upside
   if (deal.washAndFold) score += 3;
   if (deal.pickupDelivery) score += 3;
   if (deal.commercialAccounts) score += 3;
-
   return Math.max(0, Math.min(100, score));
 }
 
@@ -92,14 +85,12 @@ async function enrichDeal(deal: typeof dealsTable.$inferSelect) {
       ? Math.round((annualRent / parseFloat(deal.squareFootage)) * 100) / 100
       : null;
 
-  // Get red flag score
   const flags = await db
     .select()
     .from(redFlagsTable)
     .where(eq(redFlagsTable.dealId, deal.id));
   const redFlagScore = flags.filter((f) => f.checked).length;
 
-  // Get broker name
   let brokerName: string | null = null;
   if (deal.brokerId) {
     const [broker] = await db
@@ -132,6 +123,8 @@ async function enrichDeal(deal: typeof dealsTable.$inferSelect) {
     dealQuality: getDealQuality(dealScore),
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
+    deletedAt: deal.deletedAt?.toISOString() ?? null,
+    archivedAt: deal.archivedAt?.toISOString() ?? null,
   };
 }
 
@@ -167,11 +160,15 @@ async function initDealDocuments(dealId: number) {
   );
 }
 
-// GET /deals
+// GET /deals — active only (not deleted, not archived)
 router.get("/deals", async (req, res) => {
   try {
     const params = ListDealsQueryParams.parse(req.query);
-    let deals = await db.select().from(dealsTable).orderBy(desc(dealsTable.createdAt));
+    let deals = await db
+      .select()
+      .from(dealsTable)
+      .where(and(isNull(dealsTable.deletedAt), isNull(dealsTable.archivedAt)))
+      .orderBy(desc(dealsTable.createdAt));
 
     if (params.status) deals = deals.filter((d) => d.status === params.status);
     if (params.priority) deals = deals.filter((d) => d.priority === params.priority);
@@ -195,6 +192,36 @@ router.get("/deals", async (req, res) => {
     if (params.overdueOnly)
       deals = deals.filter((d) => d.nextActionDueDate && d.nextActionDueDate < today);
 
+    const enriched = await Promise.all(deals.map(enrichDeal));
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /deals/deleted — soft-deleted deals
+router.get("/deals/deleted", async (req, res) => {
+  try {
+    const deals = await db
+      .select()
+      .from(dealsTable)
+      .where(isNotNull(dealsTable.deletedAt))
+      .orderBy(desc(dealsTable.deletedAt));
+    const enriched = await Promise.all(deals.map(enrichDeal));
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /deals/archived — archived deals
+router.get("/deals/archived", async (req, res) => {
+  try {
+    const deals = await db
+      .select()
+      .from(dealsTable)
+      .where(and(isNotNull(dealsTable.archivedAt), isNull(dealsTable.deletedAt)))
+      .orderBy(desc(dealsTable.archivedAt));
     const enriched = await Promise.all(deals.map(enrichDeal));
     res.json(enriched);
   } catch (err) {
@@ -273,8 +300,56 @@ router.patch("/deals/:id", async (req, res) => {
   }
 });
 
-// DELETE /deals/:id
+// DELETE /deals/:id — soft delete
 router.delete("/deals/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deal] = await db
+      .update(dealsTable)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(dealsTable.id, id))
+      .returning();
+    if (!deal) return res.status(404).json({ error: "Not found" });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /deals/:id/archive
+router.post("/deals/:id/archive", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deal] = await db
+      .update(dealsTable)
+      .set({ archivedAt: new Date(), deletedAt: null, updatedAt: new Date() })
+      .where(eq(dealsTable.id, id))
+      .returning();
+    if (!deal) return res.status(404).json({ error: "Not found" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /deals/:id/restore
+router.post("/deals/:id/restore", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const [deal] = await db
+      .update(dealsTable)
+      .set({ deletedAt: null, archivedAt: null, updatedAt: new Date() })
+      .where(eq(dealsTable.id, id))
+      .returning();
+    if (!deal) return res.status(404).json({ error: "Not found" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// DELETE /deals/:id/permanent — hard delete
+router.delete("/deals/:id/permanent", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await db.delete(redFlagsTable).where(eq(redFlagsTable.dealId, id));
@@ -314,7 +389,6 @@ router.put("/deals/:id/red-flags", async (req, res) => {
           and(eq(redFlagsTable.dealId, id), eq(redFlagsTable.flagKey, flag.flagKey))
         );
     }
-    // Also update deal updatedAt so score recalculates
     await db.update(dealsTable).set({ updatedAt: new Date() }).where(eq(dealsTable.id, id));
     const flags = await db
       .select()

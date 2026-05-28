@@ -1,17 +1,27 @@
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import {
   useGetBroker, useUpdateBroker, getGetBrokerQueryKey,
   useGetBrokerDeals, getGetBrokerDealsQueryKey,
   useListNotes, useCreateNote, getListNotesQueryKey,
   useListReminders, useCreateReminder, useCompleteReminder, getListRemindersQueryKey,
+  useListBrokers,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { ArrowLeft, Mail, Phone, MapPin, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeft, Mail, Phone, MapPin, CheckCircle2, Archive, Trash2, AlertTriangle, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  softDeleteBroker, archiveBroker, getBrokerLinkedDeals, deleteBrokerUnlink, deleteBrokerReassign,
+} from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatDateShort, isOverdue } from "@/lib/format";
 
@@ -351,9 +361,121 @@ function BrokerRemindersTab({ brokerId }: { brokerId: number }) {
   );
 }
 
+function BrokerDeleteDetailModal({
+  open, broker, onOpenChange, onDeleted,
+}: { open: boolean; broker: any | null; onOpenChange: (v: boolean) => void; onDeleted: () => void }) {
+  const [linkedDeals, setLinkedDeals] = useState<any[]>([]);
+  const [loadingLinked, setLoadingLinked] = useState(false);
+  const [action, setAction] = useState<"unlink" | "reassign">("unlink");
+  const [reassignTo, setReassignTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const { data: allBrokers } = useListBrokers({});
+
+  useEffect(() => {
+    if (!open || !broker) return;
+    setLoadingLinked(true);
+    setAction("unlink");
+    setReassignTo("");
+    getBrokerLinkedDeals(broker.id)
+      .then((d) => setLinkedDeals(d ?? []))
+      .catch(() => setLinkedDeals([]))
+      .finally(() => setLoadingLinked(false));
+  }, [open, broker?.id]);
+
+  if (!broker) return null;
+  const hasLinked = linkedDeals.length > 0;
+  const otherBrokers = (allBrokers as any[] | undefined ?? []).filter((b) => b.id !== broker.id);
+  const canConfirm = !hasLinked || action === "unlink" || (action === "reassign" && !!reassignTo);
+
+  const handleConfirm = async () => {
+    setBusy(true);
+    try {
+      if (!hasLinked) {
+        await softDeleteBroker(broker.id);
+      } else if (action === "unlink") {
+        await deleteBrokerUnlink(broker.id);
+      } else if (action === "reassign" && reassignTo) {
+        await deleteBrokerReassign(broker.id, Number(reassignTo));
+      }
+      toast({ title: "Broker deleted", description: `${broker.name} moved to Deleted Brokers.` });
+      onDeleted();
+      onOpenChange(false);
+    } catch (err) {
+      toast({ title: "Error", description: String(err), variant: "destructive" });
+    } finally { setBusy(false); }
+  };
+
+  const handleArchive = async () => {
+    setBusy(true);
+    try {
+      await archiveBroker(broker.id);
+      toast({ title: "Broker archived" });
+      onDeleted();
+      onOpenChange(false);
+    } catch (err) {
+      toast({ title: "Error", description: String(err), variant: "destructive" });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Delete broker?</DialogTitle></DialogHeader>
+        {loadingLinked ? (
+          <p className="text-sm text-muted-foreground py-2">Checking linked deals…</p>
+        ) : !hasLinked ? (
+          <p className="text-sm text-muted-foreground">
+            This will move <strong>{broker.name}</strong> to Deleted Brokers. You can restore them from Settings.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 text-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-muted-foreground">
+                <strong className="text-foreground">{broker.name}</strong> is linked to{" "}
+                <strong className="text-foreground">{linkedDeals.length}</strong> deal{linkedDeals.length > 1 ? "s" : ""}. Choose what to do:
+              </p>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3 space-y-1 max-h-24 overflow-y-auto">
+              {linkedDeals.map((d) => <div key={d.id} className="flex justify-between text-xs"><span className="font-medium">{d.dealName}</span><span className="text-muted-foreground">{d.status}</span></div>)}
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="radio" name="a" checked={action === "unlink"} onChange={() => setAction("unlink")} className="mt-0.5" />
+                <div><div className="text-sm font-medium">Remove broker from linked deals and delete</div><div className="text-xs text-muted-foreground">Deals stay active with no broker</div></div>
+              </label>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="radio" name="a" checked={action === "reassign"} onChange={() => setAction("reassign")} className="mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Reassign linked deals to another broker</div>
+                  {action === "reassign" && (
+                    <Select value={reassignTo} onValueChange={setReassignTo}>
+                      <SelectTrigger className="h-7 text-xs mt-1.5 max-w-[200px]"><SelectValue placeholder="Select broker..." /></SelectTrigger>
+                      <SelectContent>{otherBrokers.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
+        <DialogFooter className="gap-2 sm:gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={handleArchive} disabled={busy}><Archive className="w-3.5 h-3.5 mr-1.5" />Archive instead</Button>
+          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={handleConfirm} disabled={busy || !canConfirm}>Delete broker</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function BrokerDetail() {
   const { id } = useParams();
   const brokerId = parseInt(id || "0", 10);
+  const [, navigate] = useLocation();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { toast } = useToast();
   const { data: broker, isLoading } = useGetBroker(brokerId, { query: { enabled: !!brokerId, queryKey: getGetBrokerQueryKey(brokerId) } });
 
   if (isLoading || !broker) {
@@ -393,8 +515,25 @@ export default function BrokerDetail() {
         </div>
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
           {broker.dealCount != null && <span><strong className="text-foreground">{broker.dealCount}</strong> deals</span>}
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={async () => {
+            await archiveBroker(broker.id);
+            toast({ title: "Broker archived" });
+            navigate("/brokers");
+          }}>
+            <Archive className="w-3 h-3" />Archive
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 text-red-600 hover:text-red-700 border-red-200" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="w-3 h-3" />Delete
+          </Button>
         </div>
       </div>
+
+      <BrokerDeleteDetailModal
+        open={deleteOpen}
+        broker={broker}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => navigate("/brokers")}
+      />
 
       <Tabs defaultValue="profile">
         <TabsList className="bg-card border w-full justify-start h-auto p-1">

@@ -4,18 +4,28 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Search, Plus, LayoutList, Columns, ChevronRight, X } from "lucide-react";
-import { formatCurrency, formatMultiple, isOverdue } from "@/lib/format";
+import { Search, Plus, LayoutList, Columns, ChevronRight, X, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { formatCurrency, isOverdue } from "@/lib/format";
 import { calculateFullUnderwriting } from "@/lib/financialCalculations";
+import { softDeleteDeal, archiveDeal } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const ALL_STATUSES = [
   "New Lead","Contacted Broker","NDA Sent","Financials Requested","Financials Received",
@@ -165,6 +175,55 @@ function PipelineView({ deals, onStatusChange }: { deals: Deal[]; onStatusChange
   );
 }
 
+// ── Delete Confirmation Modal ──────────────────────────────────────────────
+
+function DeleteDealModal({
+  open, deal, onOpenChange, onConfirm, onArchiveInstead,
+}: {
+  open: boolean;
+  deal: any | null;
+  onOpenChange: (v: boolean) => void;
+  onConfirm: () => void;
+  onArchiveInstead: () => void;
+}) {
+  if (!deal) return null;
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete deal?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <p>This will move the deal to Deleted Deals. You can restore it later from Settings.</p>
+              <div className="bg-muted/50 rounded-lg p-3 text-sm space-y-1">
+                <div className="font-semibold text-foreground">{deal.dealName}</div>
+                {(deal.city || deal.state) && <div className="text-muted-foreground">{[deal.city, deal.state].filter(Boolean).join(", ")}</div>}
+                {deal.askingPrice && <div className="text-muted-foreground">{formatCurrency(Number(deal.askingPrice))}</div>}
+                {deal.brokerName && <div className="text-muted-foreground">Broker: {deal.brokerName}</div>}
+              </div>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2 sm:gap-2">
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={onArchiveInstead}
+            className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
+          >
+            <Archive className="w-3.5 h-3.5 mr-1.5" />Archive instead
+          </AlertDialogAction>
+          <AlertDialogAction
+            onClick={onConfirm}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            Delete deal
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export default function DealsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -173,6 +232,12 @@ export default function DealsPage() {
   const [hotOnly, setHotOnly] = useState(false);
   const [view, setView] = useState<"table" | "pipeline">("table");
   const [isOpen, setIsOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
 
   const { data: deals, isLoading } = useListDeals({
     search,
@@ -203,6 +268,54 @@ export default function DealsPage() {
       onSuccess: () => { queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() }); },
     });
   };
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+
+  const handleDelete = async (deal: any) => {
+    await softDeleteDeal(deal.id);
+    toast({ title: "Deal deleted", description: `${deal.dealName} has been moved to Deleted Deals.` });
+    setDeleteTarget(null);
+    setSelected((prev) => { const s = new Set(prev); s.delete(deal.id); return s; });
+    invalidate();
+  };
+
+  const handleArchive = async (deal: any) => {
+    await archiveDeal(deal.id);
+    toast({ title: "Deal archived", description: `${deal.dealName} has been archived.` });
+    setDeleteTarget(null);
+    setSelected((prev) => { const s = new Set(prev); s.delete(deal.id); return s; });
+    invalidate();
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selected];
+    await Promise.all(ids.map(softDeleteDeal));
+    toast({ title: `${ids.length} deal${ids.length > 1 ? "s" : ""} deleted` });
+    setSelected(new Set());
+    setBulkDeleteOpen(false);
+    invalidate();
+  };
+
+  const handleBulkArchive = async () => {
+    const ids = [...selected];
+    await Promise.all(ids.map(archiveDeal));
+    toast({ title: `${ids.length} deal${ids.length > 1 ? "s" : ""} archived` });
+    setSelected(new Set());
+    setBulkArchiveOpen(false);
+    invalidate();
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelected((prev) => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
+  const allIds = (deals as any[] | undefined)?.map((d) => d.id) ?? [];
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+  const someSelected = selected.size > 0;
 
   const hasFilters = statusFilter !== "All" || priorityFilter !== "All" || overdueOnly || hotOnly || search;
 
@@ -347,6 +460,24 @@ export default function DealsPage() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {someSelected && view === "table" && (
+        <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
+          <span className="text-sm font-medium">{selected.size} deal{selected.size > 1 ? "s" : ""} selected</span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => setBulkArchiveOpen(true)}>
+              <Archive className="w-3.5 h-3.5" /> Archive selected
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300" onClick={() => setBulkDeleteOpen(true)}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete selected
+            </Button>
+            <button onClick={() => setSelected(new Set())} className="text-xs text-muted-foreground hover:text-foreground ml-1">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-2">{[...Array(4)].map((_, i) => <div key={i} className="h-11 bg-muted animate-pulse rounded" />)}</div>
       ) : !deals || deals.length === 0 ? (
@@ -360,6 +491,16 @@ export default function DealsPage() {
           <table className="w-full">
             <thead className="border-b border-border bg-muted/30">
               <tr>
+                <th className="px-3 w-8">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(v) => {
+                      if (v) setSelected(new Set(allIds));
+                      else setSelected(new Set());
+                    }}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="px-4 text-left">Deal</th>
                 <th className="px-3 text-left">Location</th>
                 <th className="px-3 text-right">Asking</th>
@@ -375,7 +516,7 @@ export default function DealsPage() {
                 <th className="px-3 text-left">Next Action</th>
                 <th className="px-3 text-right">Due</th>
                 <th className="px-3 text-right">Score</th>
-                <th className="px-3 w-8" />
+                <th className="px-3 w-10" />
               </tr>
             </thead>
             <tbody>
@@ -392,8 +533,16 @@ export default function DealsPage() {
                   : fin.cashOnCashReturn < 0.08 ? "text-red-600 font-semibold"
                   : "text-amber-600 font-semibold"
                   : "text-muted-foreground";
+                const isSelected = selected.has(d.id);
                 return (
-                  <tr key={d.id} className="hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0">
+                  <tr key={d.id} className={`hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0 ${isSelected ? "bg-primary/5" : ""}`}>
+                    <td className="px-3" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(d.id)}
+                        aria-label={`Select ${d.dealName}`}
+                      />
+                    </td>
                     <td className="px-4">
                       <Link href={`/deals/${d.id}`}>
                         <div className="font-medium text-sm text-foreground hover:text-primary cursor-pointer leading-tight">{d.dealName}</div>
@@ -431,8 +580,29 @@ export default function DealsPage() {
                     <td className="px-3 text-right">
                       <ScoreBadge score={fin.calculatedDealScore} quality={fin.dealQuality} />
                     </td>
-                    <td className="px-3 text-center">
-                      <Link href={`/deals/${d.id}`}><ChevronRight className="w-3.5 h-3.5 text-muted-foreground" /></Link>
+                    <td className="px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted transition-colors">
+                            <MoreHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/deals/${d.id}`}><ChevronRight className="w-3.5 h-3.5 mr-2" />View deal</Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleArchive(d)} className="gap-2">
+                            <Archive className="w-3.5 h-3.5" />Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setDeleteTarget(d)}
+                            className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 );
@@ -441,6 +611,51 @@ export default function DealsPage() {
           </table>
         </div>
       )}
+
+      {/* Single delete modal */}
+      <DeleteDealModal
+        open={deleteTarget !== null}
+        deal={deleteTarget}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        onArchiveInstead={() => deleteTarget && handleArchive(deleteTarget)}
+      />
+
+      {/* Bulk delete modal */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} deal{selected.size > 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will move the selected deals to Deleted Deals. You can restore them later from Settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={handleBulkDelete}>
+              Delete {selected.size} deal{selected.size > 1 ? "s" : ""}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk archive modal */}
+      <AlertDialog open={bulkArchiveOpen} onOpenChange={setBulkArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive {selected.size} deal{selected.size > 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              These deals will be hidden from your active pipeline. You can restore them later from Settings.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkArchive}>
+              Archive {selected.size} deal{selected.size > 1 ? "s" : ""}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

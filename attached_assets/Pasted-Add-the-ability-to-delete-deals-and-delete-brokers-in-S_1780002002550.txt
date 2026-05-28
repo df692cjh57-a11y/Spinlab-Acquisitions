@@ -1,0 +1,360 @@
+Add the ability to delete deals and delete brokers in Spinlab Deal Desk.
+
+Do not rebuild the app from scratch.
+Do not remove existing features.
+Keep the current clean Apple/Tesla-style design.
+
+Goal:
+Users should be able to safely delete deals and brokers without breaking linked data.
+
+--------------------------------
+1. DELETE DEALS
+--------------------------------
+
+Add delete functionality for deals.
+
+Places where delete should appear:
+- Deals table row action menu
+- Deal detail page
+- Bulk selected deals action
+
+Use soft delete first.
+
+Add these fields to the deals table/model if they do not already exist:
+
+- deleted_at
+- archived_at
+
+When a deal is deleted:
+- set deleted_at to the current timestamp
+- hide it from the main Deals page
+- hide it from active dashboard metrics
+- do not permanently remove it from the database
+
+Add a confirmation modal before deleting.
+
+Modal title:
+Delete deal?
+
+Modal body:
+This will move the deal to Deleted Deals. You can restore it later from Settings.
+
+Show in the modal:
+- Deal name
+- Address
+- Asking price
+- Linked broker, if any
+
+Buttons:
+- Cancel
+- Archive instead
+- Delete deal
+
+Delete button should be red.
+Archive should be the safer secondary option.
+
+--------------------------------
+2. DELETED DEALS VIEW
+--------------------------------
+
+In Settings, add a section called:
+
+Deleted Deals
+
+Show all soft-deleted deals.
+
+For each deleted deal, allow:
+- Restore deal
+- Permanently delete deal
+
+Restore deal:
+- clear deleted_at
+- return deal to main Deals page
+
+Permanent delete:
+- require a second confirmation modal
+
+Permanent delete modal:
+
+Title:
+Permanently delete deal?
+
+Body:
+This action cannot be undone.
+
+Buttons:
+- Cancel
+- Permanently delete
+
+Only permanently delete after confirmation.
+
+--------------------------------
+3. ARCHIVE DEALS
+--------------------------------
+
+Add archive functionality for deals if it does not already exist.
+
+When a deal is archived:
+- set archived_at to current timestamp
+- hide it from active Deals page
+- keep it available in Settings under Archived Deals
+
+Archived Deals section should allow:
+- Restore
+- Delete
+
+Restore:
+- clear archived_at
+
+--------------------------------
+4. DELETE BROKERS
+--------------------------------
+
+Add delete functionality for brokers.
+
+Places where delete should appear:
+- Brokers table row action menu
+- Broker detail page
+- Bulk selected brokers action
+
+Use soft delete first.
+
+Add these fields to the brokers table/model if they do not already exist:
+
+- deleted_at
+- archived_at
+
+When a broker is deleted:
+- set deleted_at to current timestamp
+- hide it from the main Brokers page
+- hide it from active broker dashboard metrics
+- do not permanently remove it from the database
+
+--------------------------------
+5. BROKER DELETE SAFETY
+--------------------------------
+
+Before deleting a broker, check if the broker has linked deals.
+
+If the broker has no linked deals:
+- show normal delete confirmation
+
+Modal title:
+Delete broker?
+
+Modal body:
+This will move the broker to Deleted Brokers. You can restore it later from Settings.
+
+Buttons:
+- Cancel
+- Archive instead
+- Delete broker
+
+If the broker has linked deals:
+Show a stronger confirmation modal.
+
+Modal title:
+Delete broker?
+
+Modal body:
+This broker is linked to X deals. Deleting the broker will not delete those deals. Choose what you want to do.
+
+Options:
+1. Cancel
+2. Archive broker instead
+3. Remove broker from linked deals and delete broker
+4. Reassign linked deals to another broker
+
+Important:
+- Never delete linked deals when deleting a broker.
+- If removing broker from deals, set broker_id to null on those deals.
+- If reassigning, allow user to pick another broker from a dropdown.
+- After reassignment, soft delete the broker.
+
+If a deal has no broker after deletion, show:
+No broker assigned
+
+--------------------------------
+6. DELETED BROKERS VIEW
+--------------------------------
+
+In Settings, add a section called:
+
+Deleted Brokers
+
+Show all soft-deleted brokers.
+
+For each deleted broker, allow:
+- Restore broker
+- Permanently delete broker
+
+Restore broker:
+- clear deleted_at
+- return broker to main Brokers page
+
+Permanent delete:
+- require a second confirmation modal
+
+Permanent delete modal:
+
+Title:
+Permanently delete broker?
+
+Body:
+This action cannot be undone.
+
+Buttons:
+- Cancel
+- Permanently delete
+
+--------------------------------
+7. ARCHIVE BROKERS
+--------------------------------
+
+Add archive functionality for brokers if it does not already exist.
+
+When a broker is archived:
+- set archived_at to current timestamp
+- hide it from active Brokers page
+- keep it available in Settings under Archived Brokers
+
+Archived Brokers section should allow:
+- Restore
+- Delete
+
+Restore:
+- clear archived_at
+
+--------------------------------
+8. BULK DELETE
+--------------------------------
+
+Add checkboxes to Deals and Brokers tables if they do not already exist.
+
+Deals bulk actions:
+- Archive selected deals
+- Delete selected deals
+
+Brokers bulk actions:
+- Archive selected brokers
+- Delete selected brokers
+
+Bulk delete should use soft delete.
+
+For bulk broker delete:
+- if any selected brokers have linked deals, show a warning
+- do not delete linked deals
+- offer:
+  - cancel
+  - archive selected instead
+  - remove selected brokers from linked deals and delete
+
+--------------------------------
+9. DASHBOARD AND TABLE FILTERING
+--------------------------------
+
+Update all queries and dashboard metrics so deleted and archived records are excluded by default.
+
+Deals page default:
+- show only deals where deleted_at is null and archived_at is null
+
+Brokers page default:
+- show only brokers where deleted_at is null and archived_at is null
+
+Dashboard metrics should exclude:
+- deleted deals
+- archived deals
+- deleted brokers
+- archived brokers
+
+Settings page should show:
+- archived deals
+- deleted deals
+- archived brokers
+- deleted brokers
+
+--------------------------------
+10. ACTIVITY LOG / NOTES
+--------------------------------
+
+When a deal is deleted, archived, restored, or permanently deleted, create an activity log entry if activity logging exists.
+
+Examples:
+- Deal deleted
+- Deal archived
+- Deal restored
+- Deal permanently deleted
+
+When a broker is deleted, archived, restored, or permanently deleted, create an activity log entry if activity logging exists.
+
+Examples:
+- Broker deleted
+- Broker archived
+- Broker restored
+- Broker permanently deleted
+
+If no activity log exists, skip this and do not build a major new feature.
+
+--------------------------------
+11. DESIGN REQUIREMENTS
+--------------------------------
+
+Keep the design clean and premium.
+
+Delete buttons:
+- should not be loud everywhere
+- place inside row action menus or danger sections
+- use red only in confirmation modals or destructive action buttons
+
+Archive buttons:
+- should be more visible than Delete
+- Archive is safer than Delete
+
+Confirmation modals:
+- smooth
+- clean
+- centered
+- subtle backdrop
+- clear text
+- obvious cancel button
+- destructive action in red
+
+--------------------------------
+12. TEST EVERYTHING
+--------------------------------
+
+After implementing, manually test:
+
+Deals:
+- Delete deal from table
+- Delete deal from detail page
+- Bulk delete deals
+- Deleted deal disappears from main Deals page
+- Deleted deal appears in Settings
+- Restore deleted deal
+- Permanently delete deal
+- Archive deal
+- Restore archived deal
+
+Brokers:
+- Delete broker with no linked deals
+- Delete broker with linked deals
+- Remove broker from linked deals and delete
+- Reassign linked deals to another broker
+- Deleted broker disappears from main Brokers page
+- Deleted broker appears in Settings
+- Restore deleted broker
+- Permanently delete broker
+- Archive broker
+- Restore archived broker
+
+Data safety:
+- Deleting broker does not delete linked deals
+- Deleting deal does not delete broker
+- Dashboard counts update correctly
+- Search and filters still work
+- No console errors
+- Data persists after refresh
+
+Final result:
+Spinlab Deal Desk should safely support deleting, archiving, restoring, and permanently deleting deals and brokers without breaking linked records.
