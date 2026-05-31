@@ -428,9 +428,6 @@ export default function BrokersPage() {
                 <th className="px-3 text-left">Market</th>
                 <th className="px-3 text-left">Specialty</th>
                 <th className="px-3 text-left">Relationship</th>
-                <th className="px-3 text-center">Trust</th>
-                <th className="px-3 text-center">Response</th>
-                <th className="px-3 text-center">Deal Quality</th>
                 <th className="px-3 text-center">Score</th>
                 <th className="px-3 text-right">Last Contact</th>
                 <th className="px-3 text-right">Follow-Up</th>
@@ -459,9 +456,6 @@ export default function BrokersPage() {
                     <td className="px-3 text-xs text-muted-foreground">{broker.market || "—"}</td>
                     <td className="px-3 text-xs text-muted-foreground"><span className="truncate block max-w-[120px]">{broker.specialty || "—"}</span></td>
                     <td className="px-3"><RelBadge strength={broker.relationshipStrength} /></td>
-                    <td className="px-3 text-center"><Dots value={broker.trustRating} /></td>
-                    <td className="px-3 text-center"><Dots value={broker.responsivenessRating} /></td>
-                    <td className="px-3 text-center"><Dots value={broker.dealQualityRating} /></td>
                     <td className="px-3 text-center"><BrokerScore trust={broker.trustRating} responsiveness={broker.responsivenessRating} quality={broker.dealQualityRating} /></td>
                     <td className="px-3 text-right text-xs text-muted-foreground">{broker.lastContactedDate || "—"}</td>
                     <td className={`px-3 text-right text-xs font-medium ${followUpOverdue ? "text-red-600" : "text-muted-foreground"}`}>{broker.nextFollowUpDate || "—"}</td>

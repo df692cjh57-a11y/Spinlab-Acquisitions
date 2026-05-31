@@ -507,8 +507,6 @@ export default function DealsPage() {
                 <th className="px-3 text-right">Gross Rev</th>
                 <th className="px-3 text-right">Adj. SDE</th>
                 <th className="px-3 text-right">Multiple</th>
-                <th className="px-3 text-right">DSCR</th>
-                <th className="px-3 text-right">CoC</th>
                 <th className="px-3 text-right">Rent %</th>
                 <th className="px-3 text-left">Status</th>
                 <th className="px-3 text-left">Priority</th>
@@ -523,16 +521,6 @@ export default function DealsPage() {
               {(deals as any[]).map((d) => {
                 const overdue = isOverdue(d.nextActionDueDate);
                 const fin = calculateFullUnderwriting(d);
-                const dscrColor = fin.dscr !== null
-                  ? fin.dscr >= 1.5 ? "text-emerald-600 font-semibold"
-                  : fin.dscr < 1.25 ? "text-red-600 font-semibold"
-                  : "text-amber-600 font-semibold"
-                  : "text-muted-foreground";
-                const cocColor = fin.cashOnCashReturn !== null
-                  ? fin.cashOnCashReturn >= 0.15 ? "text-emerald-600 font-semibold"
-                  : fin.cashOnCashReturn < 0.08 ? "text-red-600 font-semibold"
-                  : "text-amber-600 font-semibold"
-                  : "text-muted-foreground";
                 const isSelected = selected.has(d.id);
                 return (
                   <tr key={d.id} className={`hover:bg-muted/30 transition-colors border-b border-border/50 last:border-0 ${isSelected ? "bg-primary/5" : ""}`}>
@@ -553,16 +541,6 @@ export default function DealsPage() {
                     <td className="px-3 text-right text-sm text-muted-foreground">{formatCurrency(d.grossRevenue)}</td>
                     <td className="px-3 text-right text-sm">{d.adjustedNetIncome ? formatCurrency(Number(d.adjustedNetIncome)) : "—"}</td>
                     <td className="px-3 text-right"><MultipleCell value={fin.askingMultiple} /></td>
-                    <td className="px-3 text-right">
-                      <span className={`text-xs font-mono ${dscrColor}`}>
-                        {fin.dscr !== null ? fin.dscr.toFixed(2) + "x" : "—"}
-                      </span>
-                    </td>
-                    <td className="px-3 text-right">
-                      <span className={`text-xs font-mono ${cocColor}`}>
-                        {fin.cashOnCashReturn !== null ? (fin.cashOnCashReturn * 100).toFixed(1) + "%" : "—"}
-                      </span>
-                    </td>
                     <td className="px-3 text-right text-xs text-muted-foreground">
                       {fin.rentPctGross !== null ? (
                         <span className={fin.rentPctGross > 0.20 ? "text-red-600 font-medium" : ""}>{(fin.rentPctGross * 100).toFixed(1)}%</span>

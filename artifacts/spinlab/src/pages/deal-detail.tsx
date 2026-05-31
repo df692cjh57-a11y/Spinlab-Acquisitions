@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, FileCheck,
-  CircleDashed, TrendingUp, DollarSign, Zap, AlertOctagon, Info, MoreHorizontal, Archive, Trash2,
+  CircleDashed, TrendingUp, DollarSign, Zap, AlertOctagon, Info, MoreHorizontal, Archive, Trash2, ChevronDown,
 } from "lucide-react";
 import { softDeleteDeal, archiveDeal } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -109,6 +109,68 @@ function PriorityBadge({ priority }: { priority: string }) {
     : priority === "Medium" ? "bg-blue-50 text-blue-700 border-blue-100"
     : "bg-gray-50 text-gray-500 border-gray-200";
   return <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${cls}`}>{priority}</span>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Overview Tab (deal info + key metrics + warnings)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OverviewTab({ deal, brokers, fin }: { deal: any; brokers: any[]; fin: ReturnType<typeof calculateFullUnderwriting> }) {
+  const warnings = fin.warnings.filter((w) => w.level !== "info");
+  const infos = fin.warnings.filter((w) => w.level === "info");
+
+  return (
+    <div className="space-y-5">
+      {/* Warnings */}
+      {fin.warnings.length > 0 && (
+        <SectionCard title={`Warnings · ${fin.warnings.length}`}>
+          <div className="space-y-2">
+            {warnings.map((w, i) => <WarningBadge key={i} level={w.level} message={w.message} />)}
+            {infos.map((w, i) => <WarningBadge key={`i${i}`} level={w.level} message={w.message} />)}
+          </div>
+        </SectionCard>
+      )}
+
+      {/* Key Metrics */}
+      <SectionCard title="Key Metrics">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-5">
+          <Metric label="Asking Price" value={formatCurrency(fin.askingPrice)} />
+          <Metric label="Gross Revenue" value={formatCurrency(fin.grossRevenue)} />
+          <Metric label="Adjusted SDE" value={formatCurrency(fin.adjustedSDE)} accent="blue" />
+          <Metric
+            label="Asking Multiple"
+            value={fmtX(fin.askingMultiple)}
+            accent={fin.askingMultiple ? fin.askingMultiple > 5 ? "red" : fin.askingMultiple < 3.5 ? "green" : undefined : undefined}
+          />
+          <Metric
+            label="Rent % of Gross"
+            value={fmtPct(fin.rentPctGross)}
+            accent={fin.rentPctGross ? fin.rentPctGross > 0.20 ? "red" : fin.rentPctGross < 0.12 ? "green" : undefined : undefined}
+          />
+          <Metric
+            label="DSCR"
+            value={fin.dscr !== null ? fin.dscr.toFixed(2) + "x" : "—"}
+            accent={fin.dscr ? fin.dscr >= 1.5 ? "green" : fin.dscr < 1.25 ? "red" : "amber" : undefined}
+          />
+          <Metric
+            label="Cash-on-Cash"
+            value={fmtPct(fin.cashOnCashReturn)}
+            accent={fin.cashOnCashReturn ? fin.cashOnCashReturn >= 0.15 ? "green" : fin.cashOnCashReturn < 0.10 ? "red" : "amber" : undefined}
+          />
+          <Metric label="Max Offer" value={formatCurrency(fin.maxOffer)} sub={`at ${fin.targetMultiple}x`} />
+          <Metric label="Suggested Offer" value={formatCurrency(fin.suggestedOffer)} sub={`at ${fin.suggestedMultiple.toFixed(2)}x`} accent="blue" />
+          <Metric
+            label="Price Gap"
+            value={fin.priceGap !== null ? formatCurrency(fin.priceGap) : "—"}
+            accent={fin.priceGap !== null ? fin.priceGap > 0 ? "red" : "green" : undefined}
+          />
+        </div>
+      </SectionCard>
+
+      {/* Deal Info */}
+      <DealInfoForm deal={deal} brokers={brokers} />
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -704,7 +766,34 @@ function FinancialsForm({ deal }: { deal: any }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Other sub-tabs (preserved from original)
+// Financials tab with collapsible Advanced Underwriting
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FinancialsWithAdvanced({ deal }: { deal: any }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  return (
+    <div className="space-y-5">
+      <FinancialsForm deal={deal} />
+      <div>
+        <button
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:opacity-80 transition-opacity"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+          {showAdvanced ? "Hide" : "Show"} Advanced Underwriting Analysis
+        </button>
+        {showAdvanced && (
+          <div className="mt-5">
+            <UnderwritingTab deal={deal} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Other sub-tabs
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DealInfoForm({ deal, brokers }: { deal: any; brokers: any[] }) {
@@ -1276,14 +1365,13 @@ export default function DealDetail() {
       {/* Main layout — tabs + sidebar */}
       <div className="flex gap-6 items-start">
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="underwriting">
+          <Tabs defaultValue="overview">
             <TabsList className="bg-card border w-full justify-start h-auto p-1 overflow-x-auto flex-wrap gap-0.5">
-              <TabsTrigger value="underwriting" className="text-xs">
-                Underwriting
+              <TabsTrigger value="overview" className="text-xs">
+                Overview
                 {warningCount > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[9px] font-bold px-1.5 rounded-full">{warningCount}</span>}
               </TabsTrigger>
               <TabsTrigger value="financials" className="text-xs">Financials</TabsTrigger>
-              <TabsTrigger value="info" className="text-xs">Deal Info</TabsTrigger>
               <TabsTrigger value="lease" className="text-xs">Lease</TabsTrigger>
               <TabsTrigger value="operations" className="text-xs">Operations</TabsTrigger>
               <TabsTrigger value="redflags" className="text-xs">Red Flags</TabsTrigger>
@@ -1293,9 +1381,8 @@ export default function DealDetail() {
             </TabsList>
 
             <div className="mt-5">
-              <TabsContent value="underwriting"><UnderwritingTab deal={deal} /></TabsContent>
-              <TabsContent value="financials"><FinancialsForm deal={deal} /></TabsContent>
-              <TabsContent value="info"><DealInfoForm deal={deal} brokers={brokers || []} /></TabsContent>
+              <TabsContent value="overview"><OverviewTab deal={deal} brokers={brokers || []} fin={fin} /></TabsContent>
+              <TabsContent value="financials"><FinancialsWithAdvanced deal={deal} /></TabsContent>
               <TabsContent value="lease"><LeaseForm deal={deal} /></TabsContent>
               <TabsContent value="operations"><OperationsForm deal={deal} /></TabsContent>
               <TabsContent value="redflags"><RedFlagsTab dealId={dealId} /></TabsContent>

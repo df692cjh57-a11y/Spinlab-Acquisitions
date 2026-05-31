@@ -537,7 +537,7 @@ export default function BrokerDetail() {
 
       <Tabs defaultValue="profile">
         <TabsList className="bg-card border w-full justify-start h-auto p-1">
-          <TabsTrigger value="profile" className="text-xs">Profile</TabsTrigger>
+          <TabsTrigger value="profile" className="text-xs">Overview</TabsTrigger>
           <TabsTrigger value="deals" className="text-xs">Deals {broker.dealCount ? `(${broker.dealCount})` : ""}</TabsTrigger>
           <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
           <TabsTrigger value="reminders" className="text-xs">Reminders</TabsTrigger>

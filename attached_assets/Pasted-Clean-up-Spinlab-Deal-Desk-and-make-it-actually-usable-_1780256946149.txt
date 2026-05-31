@@ -1,0 +1,619 @@
+Clean up Spinlab Deal Desk and make it actually usable as a smooth daily CRM.
+
+Do not rebuild the app from scratch.
+Do not change the tech stack.
+Do not remove the core purpose.
+Keep the clean Apple/Tesla-like design.
+Focus on making the app functional, simple, fast, and reliable.
+
+The app is for laundromat acquisitions. It should help me track:
+- Deals
+- Brokers
+- Reminders
+- Notes
+- Underwriting math
+- Next actions
+
+Core pages to keep:
+- Dashboard
+- Deals
+- Brokers
+- Reminders
+- Settings
+
+Remove or hide anything unnecessary, broken, fake, duplicated, or confusing.
+
+--------------------------------
+1. CLEAN UP THE APP
+--------------------------------
+
+Audit the app and remove clutter.
+
+Remove or hide:
+- broken buttons
+- unfinished features
+- fake email campaign tools if they do not work
+- duplicate dashboard cards
+- unused tabs
+- unused settings sections
+- unnecessary charts
+- repeated financial sections
+- demo-only UI
+- features that look impressive but do nothing
+
+Keep only features that help daily acquisitions workflow.
+
+--------------------------------
+2. DELETE DEALS
+--------------------------------
+
+Add safe deal deletion.
+
+Deals should be deletable from:
+- Deals table row action menu
+- Deal detail page
+
+Use soft delete first.
+
+Add fields if missing:
+- deleted_at
+- archived_at
+
+When deleting a deal:
+- set deleted_at to current timestamp
+- hide it from the main Deals page
+- hide it from Dashboard active metrics
+- keep it restorable from Settings
+
+Add confirmation modal:
+
+Title:
+Delete deal?
+
+Body:
+This will move the deal to Deleted Deals. You can restore it later from Settings.
+
+Show:
+- Deal name
+- Address
+- Asking price
+- Linked broker if any
+
+Buttons:
+- Cancel
+- Archive instead
+- Delete deal
+
+Delete button should be red.
+
+--------------------------------
+3. DELETE BROKERS
+--------------------------------
+
+Add safe broker deletion.
+
+Brokers should be deletable from:
+- Brokers table row action menu
+- Broker detail page
+
+Use soft delete first.
+
+Add fields if missing:
+- deleted_at
+- archived_at
+
+When deleting a broker:
+- set deleted_at to current timestamp
+- hide it from main Brokers page
+- hide it from Dashboard active metrics
+- keep it restorable from Settings
+
+Important:
+Deleting a broker must NOT delete linked deals.
+
+If broker has linked deals, show modal:
+
+Title:
+Delete broker?
+
+Body:
+This broker is linked to X deals. Deleting this broker will not delete those deals.
+
+Options:
+- Cancel
+- Archive broker instead
+- Remove broker from linked deals and delete broker
+
+If removing broker from linked deals:
+- set broker_id to null on those deals
+- show “No broker assigned” on those deals
+
+--------------------------------
+4. SETTINGS: ARCHIVED AND DELETED RECORDS
+--------------------------------
+
+Simplify Settings.
+
+Settings should have:
+
+1. Archived Records
+2. Deleted Records
+3. Data Export
+4. App Preferences
+
+Archived Records:
+- Archived Deals
+- Archived Brokers
+- Restore button
+- Delete button
+
+Deleted Records:
+- Deleted Deals
+- Deleted Brokers
+- Restore button
+- Permanently Delete button
+
+Permanent delete should require a second confirmation:
+
+Title:
+Permanently delete?
+
+Body:
+This action cannot be undone.
+
+Buttons:
+- Cancel
+- Permanently delete
+
+--------------------------------
+5. MAKE ADDING INFO EASIER
+--------------------------------
+
+Simplify forms.
+
+Do not show one giant overwhelming form.
+
+Deal form sections:
+1. Basic Info
+2. Broker / Source
+3. Financials
+4. Lease
+5. Operations
+6. Pipeline / Next Action
+7. Notes
+
+Required deal fields:
+- Deal name
+- City or address
+- Status
+- Priority
+
+Recommended deal fields:
+- Asking price
+- Gross revenue
+- Adjusted SDE
+- Monthly rent
+- Broker
+- Next action
+- Due date
+
+Allow saving partial deals.
+
+Advanced fields should be collapsible:
+- detailed expenses
+- financing assumptions
+- equipment capex
+- upside assumptions
+- red flag checklist
+
+Add Quick Add Deal with only:
+- Deal name
+- Address
+- City
+- State
+- Broker
+- Asking price
+- Gross revenue
+- Adjusted SDE
+- Monthly rent
+- Status
+- Priority
+- Next action
+- Due date
+
+After saving Quick Add Deal, open the deal detail page.
+
+Broker form should be simple.
+
+Quick Add Broker fields:
+- Name
+- Company
+- Email
+- Phone
+- Market
+- Specialty
+- Relationship strength
+- Next follow-up date
+- Notes
+
+Required broker fields:
+- Name
+- Email or company
+
+--------------------------------
+6. CLEAN DEAL DETAIL PAGE
+--------------------------------
+
+Simplify deal detail page.
+
+Use only these tabs:
+- Overview
+- Financials
+- Lease
+- Operations
+- Red Flags
+- Documents
+- Notes
+- Reminders
+
+Top summary should show:
+- Deal name
+- Address
+- Status
+- Priority
+- Broker
+- Next action
+- Due date
+- Deal score
+- Red flag score
+
+Overview should show:
+- Asking price
+- Gross revenue
+- Adjusted SDE
+- Asking multiple
+- Rent % of gross
+- DSCR
+- Cash-on-cash return
+- Suggested offer
+- Price gap
+- Smart warnings
+- Last note
+- Next action
+
+Financials tab should be clean:
+- Summary metrics
+- Revenue
+- Expenses
+- Valuation
+- Financing
+- Returns
+- Suggested offer
+
+Put detailed math into an expandable section called:
+Advanced Underwriting
+
+--------------------------------
+7. CLEAN BROKER DETAIL PAGE
+--------------------------------
+
+Simplify broker detail page.
+
+Use only these tabs:
+- Overview
+- Linked Deals
+- Notes
+- Reminders
+
+Top summary should show:
+- Broker name
+- Company
+- Email
+- Phone
+- Market
+- Specialty
+- Relationship strength
+- Last contact
+- Next follow-up
+
+Linked Deals should show:
+- Deal name
+- Status
+- Asking price
+- Deal score
+- Next action
+
+--------------------------------
+8. CLEAN DASHBOARD
+--------------------------------
+
+Dashboard should answer:
+- What needs follow-up today?
+- What is overdue?
+- Which deals are hot?
+- Which deals are stalled?
+- Which brokers need attention?
+
+Keep only these top cards:
+- Active Deals
+- Hot Deals
+- Stalled Deals
+- Overdue Follow-Ups
+- Deals Due Today
+- Brokers Due Today
+- Average Asking Multiple
+- Total Pipeline Value
+
+Below cards, show:
+1. Today’s Follow-Ups
+2. Overdue Items
+3. Hot Deals
+4. Stalled Deals
+5. Recently Added Deals
+
+Every row should be clickable.
+
+Exclude deleted and archived records from active dashboard metrics.
+
+--------------------------------
+9. CLEAN TABLES
+--------------------------------
+
+Deals table default columns:
+- Deal
+- Location
+- Broker
+- Asking Price
+- Gross Revenue
+- Adjusted SDE
+- Multiple
+- Rent %
+- Status
+- Priority
+- Next Action
+- Due
+- Score
+- Actions
+
+Brokers table default columns:
+- Broker
+- Company
+- Market
+- Specialty
+- Relationship
+- Deals Sent
+- Last Contact
+- Next Follow-Up
+- Score
+- Actions
+
+Add row action menu:
+- View
+- Edit
+- Archive
+- Delete
+
+Make tables clean:
+- right-align numbers
+- truncate long text
+- smooth row hover
+- clean status badges
+- clean priority badges
+- no clutter
+
+--------------------------------
+10. FINANCIAL MATH SAFETY
+--------------------------------
+
+Make sure underwriting math is consistent.
+
+Use one shared helper for calculations.
+
+Fix:
+- NaN
+- Infinity
+- undefined
+- null
+- divide-by-zero
+- inconsistent math between table/detail/dashboard
+
+If a metric cannot be calculated, show:
+Not enough data
+
+Required calculations:
+- Annual rent = monthly rent x 12
+- Rent % of gross = annual rent / gross revenue
+- Rent per square foot = annual rent / square feet
+- Asking multiple = asking price / adjusted SDE
+- Max offer = adjusted SDE x target multiple
+- Price gap = asking price - max offer
+- Down payment = asking price x down payment percent
+- Loan amount = asking price - down payment - seller financing amount
+- Monthly debt service using amortization formula
+- Annual debt service = monthly debt service x 12
+- DSCR = adjusted SDE / annual debt service
+- Cash-on-cash return = cash flow after debt / total cash needed
+- Deal score
+- Red flag score
+- Suggested offer
+
+Format numbers:
+- Currency: $950,000
+- Percent: 18.5%
+- Multiple: 4.7x
+- DSCR: 1.25x
+
+--------------------------------
+11. SMART WARNINGS
+--------------------------------
+
+Keep warnings useful and not annoying.
+
+Deal warnings:
+- No next action
+- Due date overdue
+- Gross revenue missing
+- Adjusted SDE missing
+- Rent missing
+- Broker missing
+- Asking multiple above 5.0x
+- Rent above 20% of gross
+- DSCR below 1.25x
+- Lease under 5 years
+- Machine age above 12 years
+- Red flag score above 6
+
+Group warnings cleanly on deal detail page.
+
+Do not flood the dashboard with too many warnings.
+
+--------------------------------
+12. DESIGN POLISH
+--------------------------------
+
+Make the app feel smooth, clean, and premium.
+
+Design style:
+- Apple-like
+- Tesla-like
+- minimal
+- white / gray / black
+- subtle accent color
+- clean typography
+- smooth hover states
+- polished modals
+- clean forms
+- subtle shadows
+- soft borders
+- consistent spacing
+
+Avoid:
+- loud colors
+- big icons
+- harsh gradients
+- clutter
+- ugly browser-default inputs
+- inconsistent button styles
+- too many dashboard widgets
+
+Add:
+- toast messages
+- loading states
+- empty states
+- smooth modal transitions
+- clear success/error feedback
+
+Toast examples:
+- Deal saved.
+- Deal deleted.
+- Deal restored.
+- Broker saved.
+- Broker deleted.
+- Broker restored.
+- Reminder completed.
+- Not enough data.
+
+--------------------------------
+13. VALIDATION
+--------------------------------
+
+Add clean validation.
+
+Deal validation:
+- Deal name required
+- City or address required
+- Status required
+- Priority required
+- Asking price cannot be negative
+- Gross revenue cannot be negative
+- Adjusted SDE cannot be negative
+- Monthly rent cannot be negative
+- Dates must be valid
+
+Broker validation:
+- Broker name required
+- Email must be valid if entered
+- Phone optional
+- Company optional
+- Market optional
+
+Do not block saving because advanced underwriting fields are missing.
+
+--------------------------------
+14. DATA SAFETY
+--------------------------------
+
+Rules:
+- Soft delete first
+- Permanent delete only from Settings
+- Confirm destructive actions
+- Do not delete deals when deleting brokers
+- Do not lose notes when archiving
+- Do not lose reminders when archiving
+- Deleted records should be restorable
+- Archived records should be restorable
+- Data should persist after refresh
+
+--------------------------------
+15. FINAL TESTING
+--------------------------------
+
+After changes, test:
+
+Deals:
+- create works
+- edit works
+- quick add works
+- delete works
+- archive works
+- restore works
+- permanent delete works
+- deal detail opens
+- financial math still works
+
+Brokers:
+- create works
+- edit works
+- quick add works
+- delete works
+- archive works
+- restore works
+- linked deals are preserved
+
+Reminders:
+- create works
+- complete works
+- delete works
+- overdue logic works
+
+Notes:
+- add works
+- edit works
+- delete works
+- timeline works
+
+Dashboard:
+- counts are correct
+- rows click through
+- deleted/archived records are excluded
+
+General:
+- no console errors
+- no broken routes
+- no NaN
+- no Infinity
+- no undefined
+- no null
+- data persists after refresh
+
+Final result:
+Spinlab Deal Desk should feel like a clean, smooth, focused acquisitions CRM.
+
+It should be easy to:
+- add a deal
+- add a broker
+- track follow-ups
+- delete or archive records
+- input financial info
+- see whether a deal is good
+- know what to do today

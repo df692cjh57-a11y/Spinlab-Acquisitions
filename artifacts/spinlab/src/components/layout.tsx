@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { 
   Briefcase, 
   Users, 
@@ -10,9 +11,18 @@ import {
 } from "lucide-react";
 import { useListReminders } from "@workspace/api-client-react";
 
+const STORAGE_HQ_LABEL = "spinlab_hq_label";
+
 export function Sidebar() {
   const [location] = useLocation();
   const { data: reminders } = useListReminders({ overdueOnly: true });
+  const [hqLabel, setHqLabel] = useState(() => localStorage.getItem(STORAGE_HQ_LABEL) || "HQ");
+
+  useEffect(() => {
+    const handler = () => setHqLabel(localStorage.getItem(STORAGE_HQ_LABEL) || "HQ");
+    window.addEventListener("spinlab:prefs-changed", handler);
+    return () => window.removeEventListener("spinlab:prefs-changed", handler);
+  }, []);
 
   const overdueCount = reminders?.length || 0;
 
@@ -32,7 +42,7 @@ export function Sidebar() {
               <Zap className="w-3.5 h-3.5 text-background" />
             </div>
             <span className="font-semibold tracking-tight text-sm text-foreground">Spinlab</span>
-            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider ml-1 mt-0.5 border border-border px-1.5 rounded">HQ</span>
+            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider ml-1 mt-0.5 border border-border px-1.5 rounded">{hqLabel}</span>
           </div>
         </Link>
       </div>

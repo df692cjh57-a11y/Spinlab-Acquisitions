@@ -1,5 +1,5 @@
 - [Financial calculations architecture](fin-calc-arch.md) — `calculateFullUnderwriting` is the main export; `calculateDealFinancials` is a backward-compat alias only.
-- [Deal detail import pattern](deal-detail-imports.md) — three call sites use `calculateFullUnderwriting`; DealDetail component at line ~1136, UnderwritingTab at line ~113, FinancialsForm at line ~473.
 - [Soft-delete architecture](soft-delete.md) — deals and brokers use deletedAt/archivedAt timestamp columns; /deleted and /archived routes must be registered BEFORE /:id to avoid wildcard match.
 - [Toast hook path](toast-hook.md) — useToast lives at @/hooks/use-toast, NOT @/components/ui/use-toast.
 - [API helpers pattern](api-helpers.md) — direct fetch helpers for new endpoints go in artifacts/spinlab/src/lib/api.ts; never edit orval-generated lib/api-client-react/src/generated/api.ts.
+- [Deal detail tab structure](deal-detail-tabs.md) — tabs are: Overview (deal info + key metrics + warnings), Financials (inputs + collapsible Advanced Underwriting), Lease, Operations, Red Flags, Documents, Notes, Reminders. OverviewTab and FinancialsWithAdvanced are top-level functions in deal-detail.tsx.
